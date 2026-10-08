@@ -66,6 +66,7 @@ export interface MeshBuffers {
   uvs: Float32Array;
   colors: Float32Array;
   indices: Uint32Array;
+  emissive: Float32Array;
 }
 
 export interface MeshResult {
