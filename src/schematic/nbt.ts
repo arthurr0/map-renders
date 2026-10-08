@@ -1,5 +1,5 @@
 import { gunzipSync, unzlibSync } from 'fflate';
-import { SchematicParseError } from './errors';
+import { SchematicParseError, corrupted } from './errors';
 
 export class NbtLongArray {
   readonly words: Uint32Array;
@@ -8,15 +8,6 @@ export class NbtLongArray {
   }
   get length(): number {
     return this.words.length >>> 1;
-  }
-  toBigInts(): BigInt64Array {
-    const out = new BigInt64Array(this.length);
-    for (let i = 0; i < out.length; i++) {
-      const lo = BigInt(this.words[i * 2] ?? 0);
-      const hi = BigInt(this.words[i * 2 + 1] ?? 0);
-      out[i] = BigInt.asIntN(64, (hi << 32n) | lo);
-    }
-    return out;
   }
 }
 
@@ -33,10 +24,6 @@ export interface NbtRoot {
 }
 
 const MAX_DEPTH = 512;
-
-function corrupted(): SchematicParseError {
-  return new SchematicParseError('The file is corrupted or truncated and could not be read.');
-}
 
 export function decompress(data: Uint8Array): Uint8Array {
   const b0 = data[0] ?? 0;
@@ -225,6 +212,16 @@ export function decodeModifiedUtf8(bytes: Uint8Array, start: number, end: number
       const b = bytes[i++] as number;
       const c = bytes[i++] as number;
       code = ((a & 0x0f) << 12) | ((b & 0x3f) << 6) | (c & 0x3f);
+    } else if ((a & 0xf8) === 0xf0) {
+      if (i + 2 >= end) throw corrupted();
+      const b = bytes[i++] as number;
+      const c = bytes[i++] as number;
+      const d = bytes[i++] as number;
+      const cp = ((a & 0x07) << 18) | ((b & 0x3f) << 12) | ((c & 0x3f) << 6) | (d & 0x3f);
+      if (cp > 0x10ffff) throw corrupted();
+      const v = cp - 0x10000;
+      chunk.push(0xd800 | (v >> 10), 0xdc00 | (v & 0x3ff));
+      continue;
     } else {
       throw corrupted();
     }
@@ -250,8 +247,29 @@ export function readNbt(bytes: Uint8Array): NbtRoot {
   return { name, value };
 }
 
+const rootCache = new WeakMap<object, NbtRoot>();
+
 export function readCompressedNbt(data: Uint8Array): NbtRoot {
   return readNbt(decompress(data));
+}
+
+export function readCompressedNbtCached(data: Uint8Array): NbtRoot {
+  const whole = data.byteOffset === 0 && data.byteLength === data.buffer.byteLength;
+  if (!whole) return readCompressedNbt(data);
+  const hit = rootCache.get(data.buffer);
+  if (hit) return hit;
+  const root = readCompressedNbt(data);
+  rootCache.set(data.buffer, root);
+  return root;
+}
+
+export function takeCachedNbt(buffer: ArrayBuffer): NbtRoot {
+  const hit = rootCache.get(buffer);
+  if (hit) {
+    rootCache.delete(buffer);
+    return hit;
+  }
+  return readCompressedNbt(new Uint8Array(buffer));
 }
 
 export function isCompound(value: unknown): value is NbtCompound {
@@ -289,11 +307,6 @@ export function getString(c: NbtCompound, key: string): string | undefined {
 export function getInt8Array(c: NbtCompound, key: string): Int8Array | undefined {
   const v = c[key];
   return v instanceof Int8Array ? v : undefined;
-}
-
-export function getInt32Array(c: NbtCompound, key: string): Int32Array | undefined {
-  const v = c[key];
-  return v instanceof Int32Array ? v : undefined;
 }
 
 export function getLongArray(c: NbtCompound, key: string): NbtLongArray | undefined {

@@ -1,6 +1,7 @@
 import type { BlockEntity, BlockState } from '../core/types';
 import { AIR_NAME, createAirState, parseStateKey, stateKey } from '../core/volume';
 import {
+  NbtLongArray,
   isCompound,
   type NbtCompound,
   type NbtValue,
@@ -9,7 +10,7 @@ import {
   getNumber,
   getString,
 } from './nbt';
-import { SchematicParseError } from './errors';
+import { corrupted } from './errors';
 
 const AIR_NAMES = new Set([
   'minecraft:air',
@@ -48,7 +49,7 @@ export class PaletteBuilder {
   addCompound(entry: NbtCompound): number {
     const name = getString(entry, 'Name');
     if (name === undefined) {
-      throw new SchematicParseError('The file is corrupted: a palette entry has no block name.');
+      throw corrupted('a palette entry has no block name');
     }
     const props: Record<string, string> = {};
     const raw = getCompound(entry, 'Properties');
@@ -59,6 +60,16 @@ export class PaletteBuilder {
 
 export function toPlain(value: NbtValue): unknown {
   if (Array.isArray(value)) return value.map(toPlain);
+  if (value instanceof Int8Array || value instanceof Int32Array) return value.slice();
+  if (value instanceof NbtLongArray) {
+    const out = new BigInt64Array(value.length);
+    for (let i = 0; i < out.length; i++) {
+      const lo = BigInt(value.words[i * 2] as number);
+      const hi = BigInt(value.words[i * 2 + 1] as number);
+      out[i] = BigInt.asIntN(64, (hi << 32n) | lo);
+    }
+    return out;
+  }
   if (isCompound(value)) {
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(value)) out[k] = toPlain(value[k] as NbtValue);
@@ -102,4 +113,29 @@ export function readXyz(c: NbtCompound | undefined): [number, number, number] | 
 export function compoundList(c: NbtCompound, key: string): NbtCompound[] {
   const list = getList(c, key) ?? [];
   return list.filter(isCompound);
+}
+
+export function optionalString(c: NbtCompound | undefined, key: string): string | undefined {
+  const v = c ? getString(c, key) : undefined;
+  return v === undefined || v.trim() === '' ? undefined : v;
+}
+
+export function compactPalette(
+  palette: BlockState[],
+  blocks: Uint32Array,
+): { palette: BlockState[]; blocks: Uint32Array } {
+  const used = new Uint8Array(palette.length);
+  used[0] = 1;
+  for (let i = 0; i < blocks.length; i++) used[blocks[i] as number] = 1;
+  const remap = new Uint32Array(palette.length);
+  const out: BlockState[] = [];
+  for (let i = 0; i < palette.length; i++) {
+    if (used[i] === 1) {
+      remap[i] = out.length;
+      out.push(palette[i] as BlockState);
+    }
+  }
+  if (out.length === palette.length) return { palette, blocks };
+  for (let i = 0; i < blocks.length; i++) blocks[i] = remap[blocks[i] as number] as number;
+  return { palette: out, blocks };
 }

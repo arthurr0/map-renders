@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { gzipSync, zlibSync } from 'fflate';
 import { NbtLongArray, readCompressedNbt, readNbt } from '../../src/schematic/nbt';
 import { SchematicParseError } from '../../src/schematic';
-import { bitsPerEntry, decodeVarints, unpackLongs } from '../../src/schematic/codec';
+import { bitsPerEntry, decodeVarints, readPacked } from '../../src/schematic/codec';
 import {
   byte,
   bytes,
@@ -56,13 +56,18 @@ describe('nbt reader', () => {
     expect(Array.from(v['ia'] as Int32Array)).toEqual([1, -2, 3]);
     const la = v['la'] as NbtLongArray;
     expect(la.length).toBe(3);
-    expect(Array.from(la.toBigInts())).toEqual([1n, -1n, 0x123456789abcdefn]);
+    expect(Array.from(toBigInts(la))).toEqual([1n, -1n, 0x123456789abcdefn]);
     expect(Array.from(la.words.slice(4))).toEqual([0x89abcdef, 0x01234567]);
   });
 
   it('decodes modified utf-8', () => {
     const raw = writeNbt({ k: str('zażółć \u0000 €') });
     expect(readNbt(raw).value['k']).toBe('zażółć \u0000 €');
+  });
+
+  it('decodes four byte utf-8 sequences', () => {
+    const raw = Uint8Array.from([10, 0, 0, 8, 0, 1, 0x6b, 0, 4, 0xf0, 0x9f, 0x98, 0x80, 0]);
+    expect(readNbt(raw).value['k']).toBe('\u{1F600}');
   });
 
   it('handles gzip, zlib and raw input', () => {
@@ -98,6 +103,23 @@ describe('varint', () => {
     expect(() => decodeVarints([1], 2, remap)).toThrow(SchematicParseError);
   });
 });
+
+function toBigInts(a: NbtLongArray): BigInt64Array {
+  const out = new BigInt64Array(a.length);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = BigInt.asIntN(
+      64,
+      (BigInt(a.words[i * 2 + 1] as number) << 32n) | BigInt(a.words[i * 2] as number),
+    );
+  }
+  return out;
+}
+
+function unpackLongs(words: Uint32Array, bits: number, count: number): Uint32Array {
+  const identity = new Uint32Array(1 << bits);
+  for (let i = 0; i < identity.length; i++) identity[i] = i;
+  return readPacked(words, bits, count, identity);
+}
 
 function pack(values: number[], bits: number): Uint32Array {
   const total = Math.ceil((values.length * bits) / 64);

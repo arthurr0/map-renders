@@ -4,3 +4,11 @@ export class SchematicParseError extends Error {
     this.name = 'SchematicParseError';
   }
 }
+
+export function corrupted(detail?: string): SchematicParseError {
+  return new SchematicParseError(
+    detail === undefined
+      ? 'The file is corrupted or truncated and could not be read.'
+      : `The file is corrupted: ${detail}.`,
+  );
+}

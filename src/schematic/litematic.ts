@@ -1,12 +1,15 @@
 import type { BlockEntity, SchematicVolume } from '../core/types';
 import { bitsPerEntry, checkVolumeSize, readPacked } from './codec';
-import { SchematicParseError } from './errors';
+import { SchematicParseError, corrupted } from './errors';
 import { type NbtCompound, getCompound, getLongArray, getNumber, getString } from './nbt';
-import { PaletteBuilder, compoundList, makeBlockEntity, readXyz } from './palette';
-
-function corrupted(what: string): SchematicParseError {
-  return new SchematicParseError(`The file is corrupted: ${what}.`);
-}
+import {
+  PaletteBuilder,
+  compactPalette,
+  compoundList,
+  makeBlockEntity,
+  optionalString,
+  readXyz,
+} from './palette';
 
 export function isLitematic(root: NbtCompound): boolean {
   return getCompound(root, 'Regions') !== undefined;
@@ -63,7 +66,8 @@ export function parseLitematic(root: NbtCompound): SchematicVolume {
   for (const r of regions) checkVolumeSize(r.size[0], r.size[1], r.size[2]);
 
   const builder = new PaletteBuilder();
-  const blocks = new Uint32Array(cells);
+  const raw = new Uint32Array(cells);
+  const single = regions.length === 1;
   const blockEntities: BlockEntity[] = [];
 
   for (const r of regions) {
@@ -76,15 +80,22 @@ export function parseLitematic(root: NbtCompound): SchematicVolume {
       remap[i] = builder.addCompound(paletteList[i] as NbtCompound);
     }
     const [sx, sy, sz] = r.size;
-    const local = readPacked(states.words, bitsPerEntry(paletteList.length), sx * sy * sz, remap);
+    const bits = bitsPerEntry(paletteList.length);
+    const count = sx * sy * sz;
+    const local = readPacked(states.words, bits, count, remap, single ? raw : undefined);
     const ox = (r.min[0] as number) - (lo[0] as number);
     const oy = (r.min[1] as number) - (lo[1] as number);
     const oz = (r.min[2] as number) - (lo[2] as number);
-    for (let y = 0; y < sy; y++) {
-      for (let z = 0; z < sz; z++) {
-        const src = (y * sz + z) * sx;
-        const dst = ox + (oz + z) * width + (oy + y) * width * length;
-        blocks.set(local.subarray(src, src + sx), dst);
+    if (!single) {
+      for (let y = 0; y < sy; y++) {
+        for (let z = 0; z < sz; z++) {
+          const src = (y * sz + z) * sx;
+          const dst = ox + (oz + z) * width + (oy + y) * width * length;
+          for (let x = 0; x < sx; x++) {
+            const v = local[src + x] as number;
+            if (v !== 0) raw[dst + x] = v;
+          }
+        }
       }
     }
     for (const te of compoundList(r.data, 'TileEntities')) {
@@ -99,16 +110,17 @@ export function parseLitematic(root: NbtCompound): SchematicVolume {
   }
 
   const meta = getCompound(root, 'Metadata');
+  const { palette, blocks } = compactPalette(builder.palette, raw);
   return {
     width,
     height,
     length,
-    palette: builder.palette,
+    palette,
     blocks,
     blockEntities,
     metadata: {
-      name: meta ? getString(meta, 'Name') : undefined,
-      author: meta ? getString(meta, 'Author') : undefined,
+      name: optionalString(meta, 'Name'),
+      author: optionalString(meta, 'Author'),
       dataVersion: getNumber(root, 'MinecraftDataVersion'),
       format: 'litematic',
     },

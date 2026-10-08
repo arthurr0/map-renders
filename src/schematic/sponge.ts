@@ -1,12 +1,15 @@
 import type { BlockEntity, SchematicFormat, SchematicVolume } from '../core/types';
-import { checkVolumeSize, decodeVarints } from './codec';
-import { SchematicParseError } from './errors';
+import { MISSING, checkVolumeSize, decodeVarints } from './codec';
+import { corrupted } from './errors';
 import { type NbtCompound, getCompound, getInt8Array, getNumber, getString } from './nbt';
-import { PaletteBuilder, compoundList, makeBlockEntity, readIntTriple } from './palette';
-
-function corrupted(what: string): SchematicParseError {
-  return new SchematicParseError(`The file is corrupted: ${what}.`);
-}
+import {
+  PaletteBuilder,
+  compactPalette,
+  compoundList,
+  makeBlockEntity,
+  optionalString,
+  readIntTriple,
+} from './palette';
 
 export function spongeRoot(root: NbtCompound): NbtCompound {
   return getCompound(root, 'Schematic') ?? root;
@@ -37,7 +40,7 @@ function buildPalette(raw: NbtCompound, builder: PaletteBuilder): Uint32Array {
     ids.push(id);
     if (id > max) max = id;
   }
-  const remap = new Uint32Array(max + 1);
+  const remap = new Uint32Array(max + 1).fill(MISSING);
   for (let i = 0; i < keys.length; i++) {
     remap[ids[i] as number] = builder.addKey(keys[i] as string);
   }
@@ -98,7 +101,8 @@ export function parseSponge(root: NbtCompound): SchematicVolume {
 
   const builder = new PaletteBuilder();
   const remap = buildPalette(paletteTag, builder);
-  const blocks = decodeVarints(data, cells, remap);
+  const decoded = decodeVarints(data, cells, remap);
+  const { palette, blocks } = compactPalette(builder.palette, decoded);
 
   const entityList = v3
     ? blocksTag
@@ -112,12 +116,12 @@ export function parseSponge(root: NbtCompound): SchematicVolume {
     width,
     height,
     length,
-    palette: builder.palette,
+    palette,
     blocks,
     blockEntities: readEntities(entityList, width, height, length, v3),
     metadata: {
-      name: meta ? getString(meta, 'Name') : undefined,
-      author: meta ? getString(meta, 'Author') : undefined,
+      name: optionalString(meta, 'Name'),
+      author: optionalString(meta, 'Author'),
       dataVersion,
       format,
     },

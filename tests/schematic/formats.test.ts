@@ -161,6 +161,42 @@ describe('synthetic sponge v1', () => {
   });
 });
 
+describe('palette handling', () => {
+  it('rejects gaps in sponge palette ids', () => {
+    const buf = gzipNbt({
+      Version: int(1),
+      Width: short(2),
+      Height: short(1),
+      Length: short(1),
+      Palette: compound({ 'minecraft:stone': int(0), 'minecraft:dirt': int(2) }),
+      BlockData: bytes([0, 1]),
+    });
+    expect(() => parseSchematic(buf, 'x.schem')).toThrow(/missing palette entry/);
+  });
+
+  it('drops unused palette entries and normalizes empty metadata', () => {
+    const buf = gzipNbt({
+      Version: int(1),
+      Width: short(2),
+      Height: short(1),
+      Length: short(1),
+      Palette: compound({
+        'minecraft:air': int(0),
+        'minecraft:stone': int(1),
+        'minecraft:dirt': int(2),
+        'minecraft:sand': int(3),
+      }),
+      BlockData: bytes([3, 3]),
+      Metadata: compound({ Name: str(''), Author: str('  ') }),
+    });
+    const vol = parseSchematic(buf, 'x.schem');
+    expect(vol.palette.map(stateKey)).toEqual(['minecraft:air', 'minecraft:sand']);
+    expect(Array.from(vol.blocks)).toEqual([1, 1]);
+    expect(vol.metadata.name).toBeUndefined();
+    expect(vol.metadata.author).toBeUndefined();
+  });
+});
+
 describe('synthetic litematic', () => {
   function region(
     pos: [number, number, number],
@@ -191,6 +227,21 @@ describe('synthetic litematic', () => {
       TileEntities: list(10, []),
     });
   }
+
+  it('does not overwrite earlier regions with air', () => {
+    const buf = gzipNbt({
+      Regions: compound({
+        a: region([0, 0, 0], [2, 1, 1], ['minecraft:air', 'minecraft:stone'], [1, 1]),
+        b: region([1, 0, 0], [2, 1, 1], ['minecraft:air', 'minecraft:dirt'], [0, 1]),
+      }),
+    });
+    const vol = parseSchematic(buf, 'x.litematic');
+    expect(Array.from({ length: 3 }, (_, x) => getBlock(vol, x, 0, 0).name)).toEqual([
+      'minecraft:stone',
+      'minecraft:stone',
+      'minecraft:dirt',
+    ]);
+  });
 
   it('merges regions including negative sizes into one box', () => {
     const buf = gzipNbt({

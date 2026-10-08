@@ -1,7 +1,14 @@
 import type { SchematicFormat, SchematicVolume } from '../core/types';
 import { SchematicParseError } from './errors';
 import { isLitematic, parseLitematic } from './litematic';
-import { type NbtCompound, getCompound, getInt8Array, getNumber, readCompressedNbt } from './nbt';
+import {
+  type NbtCompound,
+  getCompound,
+  getInt8Array,
+  getNumber,
+  readCompressedNbtCached,
+  takeCachedNbt,
+} from './nbt';
 import { isSponge, parseSponge, spongeRoot } from './sponge';
 import { isStructure, parseStructure } from './structure';
 
@@ -33,11 +40,11 @@ function classify(root: NbtCompound): SchematicFormat {
 }
 
 export function detectFormat(data: Uint8Array, _fileName: string): SchematicFormat {
-  return classify(readCompressedNbt(data).value);
+  return classify(readCompressedNbtCached(data).value);
 }
 
 export function parseSchematic(data: ArrayBuffer, _fileName: string): SchematicVolume {
-  const root = readCompressedNbt(new Uint8Array(data)).value;
+  const root = takeCachedNbt(data).value;
   switch (classify(root)) {
     case 'litematic':
       return parseLitematic(root);

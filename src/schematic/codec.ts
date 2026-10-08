@@ -1,10 +1,7 @@
-import { SchematicParseError } from './errors';
+import { SchematicParseError, corrupted } from './errors';
 
 export const MAX_CELLS = 100_000_000;
-
-function corrupted(what: string): SchematicParseError {
-  return new SchematicParseError(`The file is corrupted: ${what}.`);
-}
+export const MISSING = 0xffffffff;
 
 export function checkVolumeSize(width: number, height: number, length: number): number {
   if (
@@ -47,8 +44,9 @@ export function decodeVarints(
       if (shift > 28) throw corrupted('invalid block data');
     }
     value >>>= 0;
-    if (value >= limit) throw corrupted('block data refers to a missing palette entry');
-    out[i] = remap[value] as number;
+    const mapped = value < limit ? (remap[value] as number) : MISSING;
+    if (mapped === MISSING) throw corrupted('block data refers to a missing palette entry');
+    out[i] = mapped;
   }
   return out;
 }
@@ -63,12 +61,12 @@ export function readPacked(
   bits: number,
   count: number,
   remap: Uint32Array,
+  out: Uint32Array = new Uint32Array(count),
 ): Uint32Array {
   if (bits < 1 || bits > 32) throw corrupted('invalid bit width');
   if (Math.ceil((count * bits) / 32) > words.length) {
     throw corrupted('packed block data is shorter than expected');
   }
-  const out = new Uint32Array(count);
   const mask = bits === 32 ? 0xffffffff : (1 << bits) - 1;
   const limit = remap.length;
   let bit = 0;
@@ -78,15 +76,10 @@ export function readPacked(
     let v = (words[w] as number) >>> s;
     if (s + bits > 32) v |= (words[w + 1] as number) << (32 - s);
     v = (v & mask) >>> 0;
-    if (v >= limit) throw corrupted('block data refers to a missing palette entry');
-    out[i] = remap[v] as number;
+    const mapped = v < limit ? (remap[v] as number) : MISSING;
+    if (mapped === MISSING) throw corrupted('block data refers to a missing palette entry');
+    out[i] = mapped;
     bit += bits;
   }
   return out;
-}
-
-export function unpackLongs(words: Uint32Array, bits: number, count: number): Uint32Array {
-  const identity = new Uint32Array(bits >= 32 ? 0 : 1 << bits);
-  for (let i = 0; i < identity.length; i++) identity[i] = i;
-  return readPacked(words, bits, count, identity);
 }

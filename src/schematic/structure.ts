@@ -1,12 +1,15 @@
 import type { BlockEntity, SchematicVolume } from '../core/types';
 import { checkVolumeSize } from './codec';
-import { SchematicParseError } from './errors';
+import { corrupted } from './errors';
 import { type NbtCompound, getCompound, getList, getNumber, getString, isCompound } from './nbt';
-import { PaletteBuilder, compoundList, makeBlockEntity, readIntTriple } from './palette';
-
-function corrupted(what: string): SchematicParseError {
-  return new SchematicParseError(`The file is corrupted: ${what}.`);
-}
+import {
+  PaletteBuilder,
+  compactPalette,
+  compoundList,
+  makeBlockEntity,
+  optionalString,
+  readIntTriple,
+} from './palette';
 
 export function isStructure(root: NbtCompound): boolean {
   return (
@@ -38,7 +41,7 @@ export function parseStructure(root: NbtCompound): SchematicVolume {
     remap[i] = builder.addCompound(entry);
   }
 
-  const blocks = new Uint32Array(cells);
+  const raw = new Uint32Array(cells);
   const blockEntities: BlockEntity[] = [];
   for (const entry of compoundList(root, 'blocks')) {
     const pos = readIntTriple(entry['pos']);
@@ -46,24 +49,27 @@ export function parseStructure(root: NbtCompound): SchematicVolume {
     if (!pos || state === undefined) continue;
     const [x, y, z] = pos;
     if (x < 0 || y < 0 || z < 0 || x >= width || y >= height || z >= length) continue;
-    if (state < 0 || state >= remap.length)
+    if (state < 0 || state >= remap.length) {
       throw corrupted('a block refers to a missing palette entry');
-    blocks[x + z * width + y * width * length] = remap[state] as number;
+    }
+    raw[x + z * width + y * width * length] = remap[state] as number;
     const nbt = getCompound(entry, 'nbt');
-    if (nbt)
+    if (nbt) {
       blockEntities.push(makeBlockEntity(pos, getString(nbt, 'id'), nbt, ['x', 'y', 'z', 'id']));
+    }
   }
 
+  const { palette, blocks } = compactPalette(builder.palette, raw);
   return {
     width,
     height,
     length,
-    palette: builder.palette,
+    palette,
     blocks,
     blockEntities,
     metadata: {
-      name: getString(root, 'name'),
-      author: getString(root, 'author'),
+      name: optionalString(root, 'name'),
+      author: optionalString(root, 'author'),
       dataVersion: getNumber(root, 'DataVersion'),
       format: 'structure-nbt',
     },
