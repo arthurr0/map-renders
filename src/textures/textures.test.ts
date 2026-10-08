@@ -7,6 +7,8 @@ import {
   layerPacks,
   loadZipPack,
   tintFor,
+  srgbToLinear,
+  linearToSrgb,
   BIOME_TINTS,
   type CanvasFactory,
   type TexturePack,
@@ -14,6 +16,7 @@ import {
 import { composeAtlas } from './atlas';
 import {
   averageColor,
+  bleedTransparent,
   chooseGrid,
   classifyLayer,
   extractFrame,
@@ -30,7 +33,7 @@ function image(width: number, height: number, fill: (x: number, y: number) => nu
   return { width, height, data };
 }
 
-const options = { padding: 2, minTileSize: 16, maxTileSize: 128 };
+const options = { padding: 4, minTileSize: 16, maxTileSize: 128, maxSize: 4096 };
 
 describe('classifyLayer', () => {
   it('detects opaque, cutout and translucent', () => {
@@ -97,7 +100,8 @@ describe('scaleNearest', () => {
 describe('chooseGrid', () => {
   it('produces power of two sizes that fit every cell', () => {
     for (const count of [1, 5, 17, 100, 700]) {
-      const grid = chooseGrid(count, 20);
+      const grid = chooseGrid(count, 20, 16384);
+      if (!grid) throw new Error('no grid');
       expect(Math.log2(grid.width) % 1).toBe(0);
       expect(Math.log2(grid.height) % 1).toBe(0);
       expect(grid.cols * grid.rows).toBeGreaterThanOrEqual(count);
@@ -113,14 +117,14 @@ describe('composeAtlas', () => {
   it('packs tiles with padding and classifies layers', () => {
     const composed = composeAtlas(
       [
-        { id: 'block/b_glass', image: solid(10, 20, 30, 128), frames: 1 },
-        { id: 'block/a_stone', image: solid(100, 100, 100), frames: 1 },
+        { id: 'block/b_glass', image: solid(10, 20, 30, 128), sheetFrames: 1 },
+        { id: 'block/a_stone', image: solid(100, 100, 100), sheetFrames: 1 },
         {
           id: 'block/c_leaves',
           image: image(16, 16, (x) => [0, 200, 0, x < 8 ? 0 : 255]),
-          frames: 1,
+          sheetFrames: 1,
         },
-        { id: 'block/d_water', image: solid(0, 0, 255), frames: 32 },
+        { id: 'block/d_water', image: solid(0, 0, 255), sheetFrames: 32 },
       ],
       ['block/mystery_log'],
       options,
@@ -140,31 +144,31 @@ describe('composeAtlas', () => {
     const first = data.regions['block/a_stone'];
     expect(first).toBeDefined();
     if (!first) return;
-    const cell = 16 + 4;
-    expect(first.u0 * data.width).toBe(2);
-    expect(first.v0 * data.height).toBe(2);
+    const cell = 16 + 8;
+    expect(first.u0 * data.width).toBe(4);
+    expect(first.v0 * data.height).toBe(4);
     expect((first.u1 - first.u0) * data.width).toBe(16);
     const second = data.regions['block/b_glass'];
-    expect(second && second.u0 * data.width).toBe(cell + 2);
+    expect(second && second.v0 * data.height).toBe(cell + 4);
   });
 
   it('extrudes tile edges into the padding', () => {
     const tile = image(16, 16, (x, y) => [x === 0 && y === 0 ? 200 : 50, 0, 0, 255]);
-    const composed = composeAtlas([{ id: 'block/t', image: tile, frames: 1 }], [], options);
+    const composed = composeAtlas([{ id: 'block/t', image: tile, sheetFrames: 1 }], [], options);
     const px = (x: number, y: number) => composed.image.data[(y * composed.image.width + x) * 4];
     expect(px(0, 0)).toBe(200);
-    expect(px(1, 1)).toBe(200);
-    expect(px(2, 2)).toBe(200);
-    expect(px(3, 3)).toBe(50);
-    expect(px(19, 19)).toBe(50);
+    expect(px(3, 3)).toBe(200);
+    expect(px(4, 4)).toBe(200);
+    expect(px(5, 5)).toBe(50);
+    expect(px(23, 23)).toBe(50);
   });
 
   it('scales smaller tiles up to the largest tile size', () => {
     const big = image(32, 32, () => [1, 1, 1, 255]);
     const composed = composeAtlas(
       [
-        { id: 'block/big', image: big, frames: 1 },
-        { id: 'block/small', image: image(16, 16, () => [9, 9, 9, 255]), frames: 1 },
+        { id: 'block/big', image: big, sheetFrames: 1 },
+        { id: 'block/small', image: image(16, 16, () => [9, 9, 9, 255]), sheetFrames: 1 },
       ],
       [],
       options,
@@ -176,12 +180,73 @@ describe('composeAtlas', () => {
 
   it('is deterministic', () => {
     const tiles = [
-      { id: 'block/x', image: image(16, 16, () => [5, 5, 5, 255]), frames: 1 },
-      { id: 'block/y', image: image(16, 16, () => [6, 6, 6, 255]), frames: 1 },
+      { id: 'block/x', image: image(16, 16, () => [5, 5, 5, 255]), sheetFrames: 1 },
+      { id: 'block/y', image: image(16, 16, () => [6, 6, 6, 255]), sheetFrames: 1 },
     ];
     const a = composeAtlas(tiles, ['block/z'], options);
     const b = composeAtlas([...tiles].reverse(), ['block/z'], options);
     expect(a.data).toEqual(b.data);
+  });
+});
+
+describe('tile size selection', () => {
+  const tile = (id: string, size: number) => ({
+    id,
+    image: image(size, size, () => [1, 2, 3, 255]),
+    sheetFrames: 1,
+  });
+
+  it('uses the most common size and downscales outliers', () => {
+    const composed = composeAtlas(
+      [tile('block/a', 16), tile('block/b', 16), tile('block/c', 16), tile('block/d', 32)],
+      [],
+      options,
+    );
+    expect(composed.tileSize).toBe(16);
+    const outlier = composed.data.regions['block/d'];
+    expect(outlier && (outlier.u1 - outlier.u0) * composed.data.width).toBe(16);
+  });
+
+  it('halves the tile size until the atlas fits maxSize', () => {
+    const tiles = Array.from({ length: 200 }, (_v, i) => tile(`block/t${i}`, 32));
+    const composed = composeAtlas(tiles, [], { ...options, maxSize: 256 });
+    expect(composed.tileSize).toBeLessThan(32);
+    expect(composed.data.width).toBeLessThanOrEqual(256);
+    expect(composed.data.height).toBeLessThanOrEqual(256);
+  });
+});
+
+describe('transparent pixels', () => {
+  it('fills the color of fully transparent pixels from opaque neighbors', () => {
+    const tile = image(16, 16, (x) => (x < 8 ? [0, 0, 0, 0] : [10, 200, 30, 255]));
+    const bled = bleedTransparent(tile);
+    expect(Array.from(bled.data.slice(0, 4))).toEqual([10, 200, 30, 0]);
+    expect(bled.data[3]).toBe(0);
+  });
+
+  it('keeps an entirely transparent tile unchanged', () => {
+    const tile = image(16, 16, () => [0, 0, 0, 0]);
+    expect(bleedTransparent(tile)).toBe(tile);
+  });
+});
+
+describe('non square textures', () => {
+  it('crops to the top left square', () => {
+    const wide = image(32, 16, (x) => [x < 16 ? 10 : 200, 0, 0, 255]);
+    const frame = extractFrame(wide, resolveAnimation(32, 16, null));
+    expect(frame.width).toBe(16);
+    expect(frame.height).toBe(16);
+    expect(frame.data[0]).toBe(10);
+    expect(frame.data[15 * 4]).toBe(10);
+  });
+});
+
+describe('srgbToLinear', () => {
+  it('converts the transfer curve', () => {
+    expect(srgbToLinear(0)).toBe(0);
+    expect(srgbToLinear(1)).toBeCloseTo(1);
+    expect(srgbToLinear(0.5)).toBeCloseTo(0.214, 3);
+    expect(linearToSrgb(srgbToLinear(0.3))).toBeCloseTo(0.3);
   });
 });
 
@@ -290,6 +355,18 @@ describe('loadZipPack', () => {
   it('rejects archives without block textures', async () => {
     const zip = zipSync({ 'pack.mcmeta': new Uint8Array([123, 125]) });
     await expect(loadZipPack(zip.buffer as ArrayBuffer, 'x')).rejects.toThrow();
+  });
+
+  it('accepts a legacy blocks folder only with current names', async () => {
+    const ok = zipSync({ 'assets/minecraft/textures/blocks/oak_planks.png': new Uint8Array([1]) });
+    const pack = await loadZipPack(ok.buffer as ArrayBuffer, 'legacy');
+    expect(await pack.has?.('block/oak_planks')).toBe(true);
+    const old = zipSync({ 'assets/minecraft/textures/blocks/planks_oak.png': new Uint8Array([1]) });
+    await expect(loadZipPack(old.buffer as ArrayBuffer, 'old')).rejects.toThrow(/1\.13/);
+  });
+
+  it('rejects data that is not a zip', async () => {
+    await expect(loadZipPack(new Uint8Array([1, 2, 3]).buffer, 'x')).rejects.toThrow(/zip/);
   });
 
   it('indexes textures and mcmeta, including nested roots', async () => {

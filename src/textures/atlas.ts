@@ -1,8 +1,10 @@
 import type { AtlasData, AtlasRegion } from '../core/types';
 import { fallbackColor } from './fallbackColors';
+import { mapLimit } from './limit';
 import type { TexturePack } from './pack';
 import {
   averageColor,
+  bleedTransparent,
   blitPadded,
   chooseGrid,
   classifyLayer,
@@ -33,12 +35,14 @@ export interface AtlasBuildOptions {
   padding?: number;
   minTileSize?: number;
   maxTileSize?: number;
+  maxSize?: number;
+  concurrency?: number;
 }
 
 export interface LoadedTile {
   id: string;
   image: RgbaImage;
-  frames: number;
+  sheetFrames: number;
 }
 
 export interface ComposedAtlas {
@@ -51,14 +55,33 @@ export interface ComposeOptions {
   padding: number;
   minTileSize: number;
   maxTileSize: number;
+  maxSize: number;
 }
 
-const DEFAULT_PADDING = 2;
+const DEFAULT_PADDING = 4;
+const DEFAULT_MAX_SIZE = 4096;
+const DEFAULT_CONCURRENCY = 24;
 const DEFAULT_MIN_TILE = 16;
 const DEFAULT_MAX_TILE = 128;
 
 export function defaultCanvasFactory(width: number, height: number): PixelCanvas {
   return new OffscreenCanvas(width, height) as unknown as PixelCanvas;
+}
+
+export function pickTileSize(tiles: LoadedTile[]): number {
+  const counts = new Map<number, number>();
+  for (const tile of tiles) {
+    counts.set(tile.image.width, (counts.get(tile.image.width) ?? 0) + 1);
+  }
+  let best = 0;
+  let bestCount = 0;
+  for (const [size, count] of counts) {
+    if (count > bestCount || (count === bestCount && size > best)) {
+      best = size;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 export function composeAtlas(
@@ -69,16 +92,20 @@ export function composeAtlas(
   const sortedTiles = [...tiles].sort((a, b) => (a.id < b.id ? -1 : 1));
   const sortedMissing = [...missingIds].sort();
 
-  let tileSize = options.minTileSize;
-  for (const tile of sortedTiles) {
-    tileSize = Math.max(tileSize, Math.max(tile.image.width, tile.image.height));
-  }
-  tileSize = Math.min(tileSize, options.maxTileSize);
-
+  let tileSize = Math.min(
+    Math.max(pickTileSize(sortedTiles), options.minTileSize),
+    options.maxTileSize,
+  );
   const padding = options.padding;
-  const cell = tileSize + padding * 2;
   const count = sortedTiles.length + sortedMissing.length;
-  const grid = chooseGrid(count, cell);
+  let found = chooseGrid(count, tileSize + padding * 2, options.maxSize);
+  while (!found) {
+    tileSize = Math.floor(tileSize / 2);
+    if (tileSize < 1) throw new Error('Atlas does not fit into the maximum texture size');
+    found = chooseGrid(count, tileSize + padding * 2, options.maxSize);
+  }
+  const grid = found;
+  const cell = tileSize + padding * 2;
   const pixels = new Uint8ClampedArray(grid.width * grid.height * 4);
 
   const regions: Record<string, AtlasRegion> = {};
@@ -103,7 +130,7 @@ export function composeAtlas(
 
   sortedTiles.forEach((tile, index) => {
     colors[tile.id] = averageColor(tile.image.data);
-    place(tile.id, scaleNearest(tile.image, tileSize), index, tile.frames);
+    place(tile.id, bleedTransparent(scaleNearest(tile.image, tileSize)), index, tile.sheetFrames);
   });
 
   sortedMissing.forEach((id, offset) => {
@@ -141,7 +168,7 @@ async function loadTile(
     const raw = context.getImageData(0, 0, bitmap.width, bitmap.height);
     const full: RgbaImage = { width: bitmap.width, height: bitmap.height, data: raw.data };
     const layout = resolveAnimation(full.width, full.height, mcmeta);
-    return { id, image: extractFrame(full, layout), frames: layout.frames };
+    return { id, image: extractFrame(full, layout), sheetFrames: layout.frames };
   } finally {
     bitmap.close?.();
   }
@@ -154,7 +181,9 @@ export async function buildAtlas(
 ): Promise<{ data: AtlasData; image: ImageBitmap | OffscreenCanvas }> {
   const createCanvas = options.createCanvas ?? defaultCanvasFactory;
   const ids = [...new Set(textureIds)];
-  const loaded = await Promise.all(ids.map((id) => loadTile(pack, id, createCanvas)));
+  const loaded = await mapLimit(ids, options.concurrency ?? DEFAULT_CONCURRENCY, (id) =>
+    loadTile(pack, id, createCanvas),
+  );
 
   const tiles: LoadedTile[] = [];
   const missing: string[] = [];
@@ -169,6 +198,7 @@ export async function buildAtlas(
     padding: options.padding ?? DEFAULT_PADDING,
     minTileSize: options.minTileSize ?? DEFAULT_MIN_TILE,
     maxTileSize: options.maxTileSize ?? DEFAULT_MAX_TILE,
+    maxSize: options.maxSize ?? DEFAULT_MAX_SIZE,
   });
 
   const canvas = createCanvas(composed.image.width, composed.image.height);

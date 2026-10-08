@@ -15,7 +15,8 @@ Modifications made for this project:
 - Only the block textures (`assets/minecraft/textures/block/*.png` and their animation metadata) were taken from the pack.
 - Variants used by the pack's emissive shaders (file names ending in `_e`, `_s` and `_e_s`) were left out.
 - The animation metadata (`.mcmeta`) was merged into `public/packs/pixel-perfection/manifest.json`.
-- One alias was added in the manifest (`wheat_stage7` points to `wheat_stage_full_7`).
+- Files that are not vanilla block texture names (pack specific extras, numbered variants, debug files) were removed, except a few files that are the target of a manifest alias.
+- Aliases were added in the manifest where vanilla names differ from pack names (for example `chain` points to `iron_chain` and `wheat_stage7` points to `wheat_stage_full_7`).
 - The image data itself was not changed.
 
 The bundled texture files are shared under the same CC BY-SA 4.0 license. The application code of this repository is not part of that adaptation.

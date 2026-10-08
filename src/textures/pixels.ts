@@ -104,12 +104,13 @@ export function extractFrame(image: RgbaImage, layout: AnimationLayout): RgbaIma
   const columns = Math.max(1, Math.floor(image.width / frameWidth));
   const originX = (firstFrame % columns) * frameWidth;
   const originY = Math.floor(firstFrame / columns) * frameHeight;
-  const data = new Uint8ClampedArray(frameWidth * frameHeight * 4);
-  for (let y = 0; y < frameHeight; y++) {
+  const side = Math.min(frameWidth, frameHeight);
+  const data = new Uint8ClampedArray(side * side * 4);
+  for (let y = 0; y < side; y++) {
     const srcStart = ((originY + y) * image.width + originX) * 4;
-    data.set(image.data.subarray(srcStart, srcStart + frameWidth * 4), y * frameWidth * 4);
+    data.set(image.data.subarray(srcStart, srcStart + side * 4), y * side * 4);
   }
-  return { width: frameWidth, height: frameHeight, data };
+  return { width: side, height: side, data };
 }
 
 export function scaleNearest(image: RgbaImage, size: number): RgbaImage {
@@ -144,24 +145,62 @@ export function solidTile(size: number, color: readonly [number, number, number]
   return { width: size, height: size, data };
 }
 
-export function chooseGrid(count: number, cell: number): GridLayout {
+export function chooseGrid(count: number, cell: number, maxSize: number): GridLayout | null {
   const total = Math.max(1, count);
   let best: GridLayout | null = null;
-  for (let width = nextPow2(cell); width <= 16384; width *= 2) {
+  for (let width = nextPow2(cell); width <= maxSize; width *= 2) {
     const cols = Math.floor(width / cell);
     if (cols < 1) continue;
     const rows = Math.ceil(total / cols);
     const height = nextPow2(rows * cell);
-    const area = width * height;
-    const bestArea = best ? best.width * best.height : Infinity;
-    const bestMax = best ? Math.max(best.width, best.height) : Infinity;
-    if (area < bestArea || (area === bestArea && Math.max(width, height) < bestMax)) {
-      best = { width, height, cols, rows };
+    if (height <= maxSize) {
+      const area = width * height;
+      const bestArea = best ? best.width * best.height : Infinity;
+      const bestMax = best ? Math.max(best.width, best.height) : Infinity;
+      if (area < bestArea || (area === bestArea && Math.max(width, height) < bestMax)) {
+        best = { width, height, cols, rows };
+      }
     }
     if (cols >= total) break;
   }
-  if (!best) throw new Error('Atlas does not fit into 16384 pixels');
   return best;
+}
+
+export function bleedTransparent(image: RgbaImage): RgbaImage {
+  const { width, height, data } = image;
+  const count = width * height;
+  const visited = new Uint8Array(count);
+  const queue = new Int32Array(count);
+  let head = 0;
+  let tail = 0;
+  for (let i = 0; i < count; i++) {
+    if ((data[i * 4 + 3] ?? 0) > 0) {
+      visited[i] = 1;
+      queue[tail++] = i;
+    }
+  }
+  if (tail === 0 || tail === count) return image;
+  const out = new Uint8ClampedArray(data);
+  while (head < tail) {
+    const index = queue[head++] ?? 0;
+    const x = index % width;
+    const y = Math.floor(index / width);
+    const neighbors = [
+      x > 0 ? index - 1 : -1,
+      x < width - 1 ? index + 1 : -1,
+      y > 0 ? index - width : -1,
+      y < height - 1 ? index + width : -1,
+    ];
+    for (const next of neighbors) {
+      if (next < 0 || visited[next]) continue;
+      visited[next] = 1;
+      out[next * 4] = out[index * 4] ?? 0;
+      out[next * 4 + 1] = out[index * 4 + 1] ?? 0;
+      out[next * 4 + 2] = out[index * 4 + 2] ?? 0;
+      queue[tail++] = next;
+    }
+  }
+  return { width, height, data: out };
 }
 
 export function blitPadded(
