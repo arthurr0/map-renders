@@ -1,0 +1,144 @@
+:root {
+  --bg: #121316;
+  --bg-elevated: #1a1c21;
+  --bg-input: #23262d;
+  --border: #2d3139;
+  --text: #e6e8ec;
+  --text-muted: #9097a3;
+  --accent: #5b9cff;
+  --accent-hover: #7ab0ff;
+  --danger: #ff6b6b;
+  --radius: 6px;
+  --gap: 12px;
+  --header-height: 48px;
+  --sidebar-width: 300px;
+  --shots-width: 240px;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 14px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 16px;
+}
+
+h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: var(--gap);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d10;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+}
+
+.app {
+  display: grid;
+  height: 100%;
+  grid-template-columns: var(--sidebar-width) 1fr var(--shots-width);
+  grid-template-rows: var(--header-height) 1fr;
+  grid-template-areas:
+    'header header header'
+    'sidebar viewport shots';
+}
+
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-file {
+  color: var(--text-muted);
+}
+
+.app-sidebar,
+.app-shots {
+  background: var(--bg-elevated);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.app-sidebar {
+  grid-area: sidebar;
+  border-right: 1px solid var(--border);
+}
+
+.app-shots {
+  grid-area: shots;
+  border-left: 1px solid var(--border);
+}
+
+.app-viewport {
+  grid-area: viewport;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.viewport-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
