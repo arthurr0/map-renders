@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { SavedShot } from '../../core';
 import { runShotExport } from '../exportRunner';
 import { flyToShot, renameShot, saveCurrentShot } from '../shots';
@@ -22,8 +22,11 @@ function ShotItem({
   const busy = useAppStore((state) => state.exportState.busy);
   const [draft, setDraft] = useState<string | null>(null);
 
+  const cancelled = useRef(false);
+
   const commit = () => {
-    if (draft !== null) renameShot(shot.id, draft);
+    if (draft !== null && !cancelled.current) renameShot(shot.id, draft);
+    cancelled.current = false;
     setDraft(null);
   };
 
@@ -52,6 +55,7 @@ function ShotItem({
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur();
             if (event.key === 'Escape') {
+              cancelled.current = true;
               setDraft(null);
               event.currentTarget.blur();
             }

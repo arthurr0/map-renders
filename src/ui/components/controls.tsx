@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
 import { useAppStore } from '../store';
 
@@ -186,17 +186,42 @@ export function Segmented<T extends string | number>({
   options: { value: T; label: string; title?: string }[];
   onChange: (value: T) => void;
 }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const tabbable = selectedIndex === -1 ? 0 : selectedIndex;
+
+  const move = (from: number, step: number) => {
+    const next = (from + step + options.length) % options.length;
+    const option = options[next];
+    if (!option) return;
+    onChange(option.value);
+    refs.current[next]?.focus();
+  };
+
   return (
     <div className="segmented" role="radiogroup" aria-label={label}>
-      {options.map((option) => (
+      {options.map((option, index) => (
         <button
           key={String(option.value)}
+          ref={(node) => {
+            refs.current[index] = node;
+          }}
           type="button"
           role="radio"
           aria-checked={option.value === value}
+          tabIndex={index === tabbable ? 0 : -1}
           title={option.title}
           className={option.value === value ? 'selected' : ''}
           onClick={() => onChange(option.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+              event.preventDefault();
+              move(index, 1);
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              move(index, -1);
+            }
+          }}
         >
           {option.label}
         </button>

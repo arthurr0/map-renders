@@ -105,38 +105,3 @@ export function applyPreset(current: RenderSettings, preset: StylePreset): Rende
     ambientOcclusionVertex: current.ambientOcclusionVertex,
   };
 }
-
-function inRange(value: number, min: number, max: number): boolean {
-  return Number.isFinite(value) && value >= min && value <= max;
-}
-
-const HEX = /^#[0-9a-fA-F]{6}$/;
-
-export function isValidRenderSettings(s: RenderSettings): boolean {
-  const colors = [s.sun.color, s.ambient.color, s.fog.color];
-  if (s.background.type === 'solid') colors.push(s.background.color);
-  if (s.background.type === 'gradient') colors.push(s.background.top, s.background.bottom);
-  if (!colors.every((c) => HEX.test(c))) return false;
-  if (s.background.type === 'sky') {
-    if (!inRange(s.background.timeOfDay, 0, 24)) return false;
-    if (!inRange(s.background.turbidity, 1, 20)) return false;
-  }
-  return (
-    ['textured', 'simplified'].includes(s.textureMode) &&
-    ['none', 'shadow-catcher', 'grass', 'grid', 'water'].includes(s.ground) &&
-    ['aces', 'agx', 'neutral', 'none'].includes(s.toneMapping) &&
-    [1024, 2048, 4096].includes(s.shadows.mapSize) &&
-    inRange(s.sun.azimuth, 0, 360) &&
-    inRange(s.sun.elevation, 0, 90) &&
-    inRange(s.sun.intensity, 0, 10) &&
-    inRange(s.ambient.intensity, 0, 3) &&
-    inRange(s.shadows.softness, 0, 10) &&
-    inRange(s.ssao.intensity, 0, 4) &&
-    inRange(s.ssao.radius, 0, 4) &&
-    inRange(s.bloom.strength, 0, 3) &&
-    inRange(s.bloom.threshold, 0, 1) &&
-    inRange(s.bloom.radius, 0, 1) &&
-    inRange(s.fog.density, 0, 0.1) &&
-    inRange(s.exposure, 0.1, 4)
-  );
-}

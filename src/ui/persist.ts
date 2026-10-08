@@ -7,6 +7,8 @@ import {
   type SavedShot,
 } from '../core';
 
+import { RANGES, numberInRange } from './settingsRanges';
+
 const PREFIX = 'mr:';
 
 export function readJson(key: string): unknown {
@@ -61,15 +63,15 @@ export function sanitizeBackground(raw: unknown, fallback: Background): Backgrou
     case 'sky':
       return {
         type: 'sky',
-        timeOfDay: num(raw.timeOfDay, 12),
-        turbidity: num(raw.turbidity, 4),
+        timeOfDay: numberInRange(raw.timeOfDay, 12, RANGES.timeOfDay),
+        turbidity: numberInRange(raw.turbidity, 4, RANGES.turbidity),
       };
     case 'hdri':
       return {
         type: 'hdri',
         id: typeof raw.id === 'string' ? raw.id : '',
-        blur: num(raw.blur, 0),
-        rotation: num(raw.rotation, 0),
+        blur: numberInRange(raw.blur, 0, RANGES.hdriBlur),
+        rotation: numberInRange(raw.rotation, 0, RANGES.hdriRotation),
       };
     case 'transparent':
       return { type: 'transparent' };
@@ -96,35 +98,35 @@ export function sanitizeSettings(raw: unknown): RenderSettings {
       base.ground,
     ),
     sun: {
-      azimuth: num(sun.azimuth, base.sun.azimuth),
-      elevation: num(sun.elevation, base.sun.elevation),
-      intensity: num(sun.intensity, base.sun.intensity),
+      azimuth: numberInRange(sun.azimuth, base.sun.azimuth, RANGES.azimuth),
+      elevation: numberInRange(sun.elevation, base.sun.elevation, RANGES.elevation),
+      intensity: numberInRange(sun.intensity, base.sun.intensity, RANGES.sunIntensity),
       color: color(sun.color, base.sun.color),
     },
     ambient: {
-      intensity: num(ambient.intensity, base.ambient.intensity),
+      intensity: numberInRange(ambient.intensity, base.ambient.intensity, RANGES.ambientIntensity),
       color: color(ambient.color, base.ambient.color),
     },
     useBackgroundLighting: bool(raw.useBackgroundLighting, base.useBackgroundLighting),
     shadows: {
       enabled: bool(shadows.enabled, base.shadows.enabled),
-      softness: num(shadows.softness, base.shadows.softness),
+      softness: numberInRange(shadows.softness, base.shadows.softness, RANGES.shadowSoftness),
       mapSize: pick(shadows.mapSize, [1024, 2048, 4096] as const, base.shadows.mapSize),
     },
     ssao: {
       enabled: bool(ssao.enabled, base.ssao.enabled),
-      intensity: num(ssao.intensity, base.ssao.intensity),
-      radius: num(ssao.radius, base.ssao.radius),
+      intensity: numberInRange(ssao.intensity, base.ssao.intensity, RANGES.ssaoIntensity),
+      radius: numberInRange(ssao.radius, base.ssao.radius, RANGES.ssaoRadius),
     },
     bloom: {
       enabled: bool(bloom.enabled, base.bloom.enabled),
-      strength: num(bloom.strength, base.bloom.strength),
-      threshold: num(bloom.threshold, base.bloom.threshold),
-      radius: num(bloom.radius, base.bloom.radius),
+      strength: numberInRange(bloom.strength, base.bloom.strength, RANGES.bloomStrength),
+      threshold: numberInRange(bloom.threshold, base.bloom.threshold, RANGES.bloomThreshold),
+      radius: numberInRange(bloom.radius, base.bloom.radius, RANGES.bloomRadius),
     },
     fog: {
       enabled: bool(fog.enabled, base.fog.enabled),
-      density: num(fog.density, base.fog.density),
+      density: numberInRange(fog.density, base.fog.density, RANGES.fogDensity),
       color: color(fog.color, base.fog.color),
     },
     toneMapping: pick(
@@ -132,7 +134,7 @@ export function sanitizeSettings(raw: unknown): RenderSettings {
       ['aces', 'agx', 'neutral', 'none'] as const,
       base.toneMapping,
     ),
-    exposure: num(raw.exposure, base.exposure),
+    exposure: numberInRange(raw.exposure, base.exposure, RANGES.exposure),
     ambientOcclusionVertex: bool(raw.ambientOcclusionVertex, base.ambientOcclusionVertex),
   };
 }

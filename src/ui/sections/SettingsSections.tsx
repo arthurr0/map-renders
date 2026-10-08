@@ -36,7 +36,9 @@ export function GroundSection() {
 }
 
 export function LightingSection() {
-  const { sun, ambient, useBackgroundLighting } = useAppStore((state) => state.settings);
+  const sun = useAppStore((state) => state.settings.sun);
+  const ambient = useAppStore((state) => state.settings.ambient);
+  const useBackgroundLighting = useAppStore((state) => state.settings.useBackgroundLighting);
   const updateSettings = useAppStore((state) => state.updateSettings);
   return (
     <Section id="lighting" title="Lighting">
@@ -103,9 +105,13 @@ const TONE_MAPPING: { value: RenderSettings['toneMapping']; label: string }[] = 
 ];
 
 export function EffectsSection() {
-  const settings = useAppStore((state) => state.settings);
+  const shadows = useAppStore((state) => state.settings.shadows);
+  const ssao = useAppStore((state) => state.settings.ssao);
+  const bloom = useAppStore((state) => state.settings.bloom);
+  const fog = useAppStore((state) => state.settings.fog);
+  const toneMapping = useAppStore((state) => state.settings.toneMapping);
+  const exposure = useAppStore((state) => state.settings.exposure);
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const { shadows, ssao, bloom, fog } = settings;
   return (
     <Section id="effects" title="Effects">
       <Toggle
@@ -213,13 +219,13 @@ export function EffectsSection() {
       )}
       <SelectField
         label="Tone mapping"
-        value={settings.toneMapping}
+        value={toneMapping}
         options={TONE_MAPPING}
         onChange={(toneMapping) => updateSettings({ toneMapping })}
       />
       <Slider
         label="Exposure"
-        value={settings.exposure}
+        value={exposure}
         min={0.1}
         max={4}
         step={0.05}
@@ -293,7 +299,6 @@ export function CameraSection() {
 }
 
 export function PresetsSection() {
-  const settings = useAppStore((state) => state.settings);
   const replaceSettings = useAppStore((state) => state.replaceSettings);
   const pushToast = useAppStore((state) => state.pushToast);
   return (
@@ -305,7 +310,7 @@ export function PresetsSection() {
             type="button"
             className="preset"
             onClick={() => {
-              replaceSettings(applyPreset(settings, preset));
+              replaceSettings(applyPreset(useAppStore.getState().settings, preset));
               pushToast('info', `Applied ${preset.label}`);
             }}
           >

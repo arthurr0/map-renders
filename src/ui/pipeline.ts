@@ -24,18 +24,39 @@ interface LoadedModel {
   mode: MeshOptions['mode'];
 }
 
-let runId = 0;
+let loadRun = 0;
+let rebuildRun = 0;
+let packRun = 0;
+let syncDelay = 250;
+let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingAtlas = false;
 let bundledPack: Promise<TexturePack> | null = null;
 let model: LoadedModel | null = null;
 
 export function resetPipelineForTests(): void {
-  runId = 0;
+  loadRun = 0;
+  rebuildRun = 0;
+  packRun = 0;
+  cancelScheduledRebuild();
   bundledPack = null;
   model = null;
 }
 
-export function currentRunId(): number {
-  return runId;
+function cancelScheduledRebuild(): void {
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+  rebuildTimer = null;
+  pendingAtlas = false;
+}
+
+function scheduleRebuild(rebuildAtlas: boolean, delay: number): void {
+  pendingAtlas = pendingAtlas || rebuildAtlas;
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => {
+    rebuildTimer = null;
+    const atlas = pendingAtlas;
+    pendingAtlas = false;
+    void rebuildModel({ rebuildAtlas: atlas });
+  }, delay);
 }
 
 function setStep(index: number): void {
@@ -85,32 +106,36 @@ async function ensurePack(): Promise<TexturePack> {
 }
 
 export async function applyBundledPack(): Promise<void> {
-  const store = useAppStore.getState();
-  store.setPackLoading(true);
+  const run = ++packRun;
+  useAppStore.getState().setPackLoading(true);
   try {
     const pack = await getBundledPack();
+    if (run !== packRun) return;
     useAppStore.getState().setPack(pack, 'bundled', null);
   } catch (error) {
+    if (run !== packRun) return;
     useAppStore.getState().pushToast('error', errorMessage(error));
   } finally {
-    useAppStore.getState().setPackLoading(false);
+    if (run === packRun) useAppStore.getState().setPackLoading(false);
   }
 }
 
 export async function applyZipPack(file: File): Promise<void> {
-  const store = useAppStore.getState();
-  store.setPackLoading(true);
+  const run = ++packRun;
+  useAppStore.getState().setPackLoading(true);
   try {
     const base = await getBundledPack();
     const zip = await loadZipPack(await file.arrayBuffer(), file.name);
+    if (run !== packRun) return;
     useAppStore.getState().setPack(layerPacks(zip, base), 'zip', file.name);
     useAppStore.getState().pushToast('success', `Loaded resource pack ${file.name}`);
   } catch (error) {
+    if (run !== packRun) return;
     useAppStore
       .getState()
       .pushToast('error', `Could not read the resource pack: ${errorMessage(error)}`);
   } finally {
-    useAppStore.getState().setPackLoading(false);
+    if (run === packRun) useAppStore.getState().setPackLoading(false);
   }
 }
 
@@ -120,9 +145,12 @@ function pushModel(renderer: SceneRenderer, loaded: LoadedModel, settings: Rende
 }
 
 export async function loadSchematicFile(file: File): Promise<void> {
-  const run = ++runId;
+  const run = ++loadRun;
+  rebuildRun++;
+  cancelScheduledRebuild();
   const store = useAppStore.getState();
-  const stale = () => run !== runId;
+  const stale = () => run !== loadRun;
+  let used: SyncSnapshot | null = null;
   store.setLoading(true);
   store.setError(null);
   try {
@@ -133,8 +161,6 @@ export async function loadSchematicFile(file: File): Promise<void> {
     setStep(1);
     const volume = await parseInWorker(data, file.name);
     if (stale()) return;
-    useAppStore.getState().setHideBlocks([]);
-    useAppStore.getState().setVolume(volume, file.name);
 
     setStep(2);
     const pack = await ensurePack();
@@ -146,7 +172,7 @@ export async function loadSchematicFile(file: File): Promise<void> {
     if (stale()) return;
 
     setStep(4);
-    const meshOptions = useAppStore.getState().meshOptions;
+    const meshOptions = { ...useAppStore.getState().meshOptions, hideBlocks: [] };
     const result = await meshInWorker(volume, atlas.data, meshOptions);
     if (stale()) return;
 
@@ -159,6 +185,10 @@ export async function loadSchematicFile(file: File): Promise<void> {
       mode: meshOptions.mode,
     };
     model = loaded;
+    const current = useAppStore.getState();
+    current.setHideBlocks([]);
+    current.setVolume(volume, file.name);
+    used = { settings: current.settings, meshOptions, pack };
     const renderer = getRenderer();
     if (renderer) {
       pushModel(renderer, loaded, useAppStore.getState().settings);
@@ -181,15 +211,25 @@ export async function loadSchematicFile(file: File): Promise<void> {
     if (!stale()) {
       useAppStore.getState().setLoading(false);
       useAppStore.getState().setStep(null);
+      if (used) {
+        const now = useAppStore.getState();
+        const decision = decideUpdate(used, {
+          settings: now.settings,
+          meshOptions: now.meshOptions,
+          pack: now.pack,
+        });
+        if (decision.remesh) scheduleRebuild(decision.rebuildAtlas, 0);
+      }
     }
   }
 }
 
 export async function rebuildModel(options: { rebuildAtlas?: boolean } = {}): Promise<void> {
   const current = model;
-  if (!current) return;
-  const run = ++runId;
-  const stale = () => run !== runId;
+  if (!current || useAppStore.getState().loading) return;
+  const run = ++rebuildRun;
+  const loadAtStart = loadRun;
+  const stale = () => run !== rebuildRun || loadAtStart !== loadRun;
   try {
     useAppStore.getState().setStep({ index: 0, total: 2, label: 'Updating model' });
     let { atlasData, atlasImage } = current;
@@ -250,21 +290,13 @@ export function decideUpdate(prev: SyncSnapshot, next: SyncSnapshot): UpdateDeci
 }
 
 export function startPipelineSync(debounceMs = 250): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let pendingAtlas = false;
+  syncDelay = debounceMs;
 
   const unsubscribeStore = useAppStore.subscribe((state, prev) => {
     const decision = decideUpdate(prev, state);
     if (decision.applySettings) getRenderer()?.setSettings(state.settings);
-    if (!decision.remesh || !state.volume || state.loading) return;
-    pendingAtlas = pendingAtlas || decision.rebuildAtlas;
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      const rebuildAtlas = pendingAtlas;
-      pendingAtlas = false;
-      void rebuildModel({ rebuildAtlas });
-    }, debounceMs);
+    if (!decision.remesh || !model || state.loading) return;
+    scheduleRebuild(decision.rebuildAtlas, syncDelay);
   });
 
   const unsubscribeRenderer = onRendererChange((renderer) => {
@@ -279,6 +311,6 @@ export function startPipelineSync(debounceMs = 250): () => void {
   return () => {
     unsubscribeStore();
     unsubscribeRenderer();
-    if (timer) clearTimeout(timer);
+    cancelScheduledRebuild();
   };
 }

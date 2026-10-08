@@ -291,6 +291,9 @@ export function startPersistence(delayMs = 400): () => void {
     if (state.shotsStorageKey) writeJson(state.shotsStorageKey, state.shots);
   };
   const unsubscribe = useAppStore.subscribe((state, prev) => {
+    if (prev.shotsStorageKey && prev.shotsStorageKey !== state.shotsStorageKey) {
+      writeJson(prev.shotsStorageKey, prev.shots);
+    }
     const changed =
       state.settings !== prev.settings ||
       state.openSections !== prev.openSections ||

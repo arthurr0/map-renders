@@ -10,8 +10,9 @@ import {
   sanitizeFilePart,
   turntableFileName,
 } from './exportMath';
-import { renderTargets, resolveTargets, uniqueFileNames } from './exportRunner';
-import { applyPreset, isValidRenderSettings, STYLE_PRESETS } from './presets';
+import { isAbortError, renderTargets, resolveTargets, uniqueFileNames } from './exportRunner';
+import { sanitizeSettings } from './persist';
+import { applyPreset, STYLE_PRESETS } from './presets';
 import { setRenderer } from './rendererRef';
 
 afterEach(() => {
@@ -72,6 +73,12 @@ describe('file naming', () => {
     expect(uniqueFileNames(['a.png', 'a.png', 'b.png'])).toEqual(['a.png', 'a-2.png', 'b.png']);
   });
 
+  it('keeps de-duplicated names unique against the whole set', () => {
+    const result = uniqueFileNames(['a.png', 'a.png', 'a-2.png']);
+    expect(new Set(result).size).toBe(3);
+    expect(result[2]).toBe('a-2.png');
+  });
+
   it('turns transparency off for jpeg', () => {
     const options = normalizeExportOptions({
       ...DEFAULT_EXPORT_OPTIONS,
@@ -108,6 +115,27 @@ describe('export runner', () => {
     expect(renderer.camera).toEqual(MOCK_CAMERA);
   });
 
+  it('passes the abort signal to the renderer and treats AbortError as a cancel', async () => {
+    const renderer = createMockRenderer();
+    setRenderer(renderer);
+    let received: AbortSignal | undefined;
+    renderer.renderImage = async (_options, _progress, signal) => {
+      received = signal;
+      throw new DOMException('aborted', 'AbortError');
+    };
+    const controller = new AbortController();
+    const outcome = renderTargets(
+      resolveTargets('all', shots, []),
+      DEFAULT_EXPORT_OPTIONS,
+      'x',
+      controller.signal,
+      () => undefined,
+    );
+    await expect(outcome).rejects.toMatchObject({ name: 'AbortError' });
+    expect(received).toBe(controller.signal);
+    expect(isAbortError(new DOMException('x', 'AbortError'))).toBe(true);
+  });
+
   it('stops when cancelled', async () => {
     const renderer = createMockRenderer();
     setRenderer(renderer);
@@ -130,7 +158,7 @@ describe('style presets', () => {
   it('produces valid render settings', () => {
     for (const preset of STYLE_PRESETS) {
       const result = applyPreset(DEFAULT_RENDER_SETTINGS, preset);
-      expect(isValidRenderSettings(result), preset.id).toBe(true);
+      expect(sanitizeSettings(result), preset.id).toEqual(result);
     }
   });
 
@@ -148,5 +176,21 @@ describe('style presets', () => {
 
   it('has unique ids and the five requested looks', () => {
     expect(new Set(STYLE_PRESETS.map((p) => p.id)).size).toBe(5);
+  });
+});
+
+describe('settings clamping', () => {
+  it('clamps numeric values into their ranges', () => {
+    const result = sanitizeSettings({
+      exposure: 99,
+      sun: { elevation: -20, intensity: 1000 },
+      fog: { density: 5 },
+      background: { type: 'sky', timeOfDay: 40, turbidity: -3 },
+    });
+    expect(result.exposure).toBe(4);
+    expect(result.sun.elevation).toBe(0);
+    expect(result.sun.intensity).toBe(10);
+    expect(result.fog.density).toBe(0.1);
+    expect(result.background).toEqual({ type: 'sky', timeOfDay: 24, turbidity: 1 });
   });
 });

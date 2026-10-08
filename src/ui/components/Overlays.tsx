@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../store';
 import { IconButton } from './Icon';
+import { useDialogFocus } from './useDialogFocus';
 
 export function Toasts() {
   const toasts = useAppStore((state) => state.toasts);
@@ -57,9 +58,7 @@ export function HelpOverlay() {
   const open = useAppStore((state) => state.helpOpen);
   const setOpen = useAppStore((state) => state.setHelpOpen);
   const dialog = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (open) dialog.current?.focus();
-  }, [open]);
+  useDialogFocus(open, dialog);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {

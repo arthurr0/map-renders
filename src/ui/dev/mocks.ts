@@ -92,12 +92,20 @@ export class MockRenderer {
   resize(): void {
     this.calls.push('resize');
   }
-  async renderImage(options: ExportOptions, onProgress?: (p: number) => void): Promise<Blob> {
+  async renderImage(
+    options: ExportOptions,
+    onProgress?: (p: number) => void,
+    _signal?: AbortSignal,
+  ): Promise<Blob> {
     this.images.push(options);
     onProgress?.(1);
     return new Blob(['image'], { type: `image/${options.format}` });
   }
-  async renderTurntable(_options: TurntableOptions): Promise<Blob> {
+  async renderTurntable(
+    _options: TurntableOptions,
+    _onProgress?: (p: number) => void,
+    _signal?: AbortSignal,
+  ): Promise<Blob> {
     return new Blob(['video']);
   }
   async captureThumbnail(): Promise<string> {

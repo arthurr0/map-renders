@@ -15,7 +15,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function handleShortcut(event: KeyboardEvent): boolean {
-  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return false;
   if (isTypingTarget(event.target)) return false;
   const store = useAppStore.getState();
   if (store.exportOpen || store.helpOpen) return false;

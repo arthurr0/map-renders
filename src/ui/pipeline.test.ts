@@ -241,6 +241,54 @@ describe('re-mesh versus setSettings decisions', () => {
       stop();
     });
 
+    it('does not let a pending re-mesh break a load that starts after it', async () => {
+      const renderer = createMockRenderer();
+      setRenderer(renderer);
+      const stop = startPipelineSync(250);
+      await loadSchematicFile(createMockFile('a.schem'));
+      useAppStore.getState().updateSettings({ textureMode: 'simplified' });
+      const parse = createDeferred<ReturnType<typeof createMockVolume>>();
+      parseMock.mockImplementationOnce(() => parse.promise);
+      const second = loadSchematicFile(createMockFile('b.schem'));
+      await vi.advanceTimersByTimeAsync(400);
+      parse.resolve(createMockVolume('b'));
+      await second;
+      await vi.advanceTimersByTimeAsync(400);
+      expect(useAppStore.getState().loading).toBe(false);
+      expect(useAppStore.getState().fileName).toBe('b.schem');
+      expect(meshMock).toHaveBeenCalledTimes(2);
+      stop();
+    });
+
+    it('re-meshes after a load when options changed during the load', async () => {
+      const renderer = createMockRenderer();
+      setRenderer(renderer);
+      const stop = startPipelineSync(250);
+      const slowMesh = createDeferred<ReturnType<typeof createMockMesh>>();
+      meshMock.mockImplementationOnce(() => slowMesh.promise);
+      const load = loadSchematicFile(createMockFile('a.schem'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(meshMock).toHaveBeenCalledTimes(1);
+      useAppStore.getState().updateSettings({ textureMode: 'simplified' });
+      slowMesh.resolve(createMockMesh());
+      await load;
+      await vi.advanceTimersByTimeAsync(10);
+      expect(meshMock).toHaveBeenCalledTimes(2);
+      expect(meshMock.mock.calls[1]?.[2]).toMatchObject({ mode: 'simplified' });
+      expect(renderer.models.at(-1)?.mode).toBe('simplified');
+      stop();
+    });
+
+    it('keeps the previous file info when a later load fails', async () => {
+      setRenderer(createMockRenderer());
+      await loadSchematicFile(createMockFile('a.schem'));
+      meshMock.mockRejectedValueOnce(new Error('mesh failed'));
+      await loadSchematicFile(createMockFile('b.schem'));
+      expect(useAppStore.getState().fileName).toBe('a.schem');
+      expect(useAppStore.getState().error).toBe('mesh failed');
+      expect(useAppStore.getState().loading).toBe(false);
+    });
+
     it('skips rebuild without a loaded model', async () => {
       await rebuildModel();
       expect(meshMock).not.toHaveBeenCalled();

@@ -28,6 +28,14 @@ export class ExportCancelled extends Error {
   }
 }
 
+export function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 let activeController: AbortController | null = null;
 
 export function resolveTargets(
@@ -41,13 +49,24 @@ export function resolveTargets(
 }
 
 export function uniqueFileNames(names: string[]): string[] {
-  const seen = new Map<string, number>();
+  const reserved = new Set(names);
+  const used = new Set<string>();
   return names.map((name) => {
-    const count = seen.get(name) ?? 0;
-    seen.set(name, count + 1);
-    if (count === 0) return name;
+    if (!used.has(name)) {
+      used.add(name);
+      return name;
+    }
     const dot = name.lastIndexOf('.');
-    return `${name.slice(0, dot)}-${count + 1}${name.slice(dot)}`;
+    const stem = dot === -1 ? name : name.slice(0, dot);
+    const extension = dot === -1 ? '' : name.slice(dot);
+    let counter = 2;
+    let candidate = `${stem}-${counter}${extension}`;
+    while (used.has(candidate) || reserved.has(candidate)) {
+      counter++;
+      candidate = `${stem}-${counter}${extension}`;
+    }
+    used.add(candidate);
+    return candidate;
   });
 }
 
@@ -80,8 +99,10 @@ export async function renderTargets(
       const target = targets[index];
       if (!target) continue;
       if (target.camera) renderer.setCamera(target.camera, false);
-      const blob = await renderer.renderImage(options, (fraction) =>
-        onProgress((index + fraction) / targets.length),
+      const blob = await renderer.renderImage(
+        options,
+        (fraction) => onProgress((index + fraction) / targets.length),
+        signal,
       );
       if (signal.aborted) throw new ExportCancelled();
       files.push({
@@ -136,7 +157,7 @@ async function guarded(task: (signal: AbortSignal) => Promise<string>): Promise<
     useAppStore.getState().pushToast('success', `Exported ${name}`);
     useAppStore.getState().setExportProgress(false, 1, null);
   } catch (error) {
-    if (error instanceof ExportCancelled) {
+    if (error instanceof ExportCancelled || isAbortError(error)) {
       useAppStore.getState().setExportProgress(false, 0, null);
       return;
     }
@@ -191,8 +212,10 @@ export async function runTurntableExport(options: TurntableOptions): Promise<voi
     return;
   }
   await guarded(async (signal) => {
-    const blob = await renderer.renderTurntable(options, (fraction) =>
-      useAppStore.getState().setExportProgress(true, fraction),
+    const blob = await renderer.renderTurntable(
+      options,
+      (fraction) => useAppStore.getState().setExportProgress(true, fraction),
+      signal,
     );
     if (signal.aborted) throw new ExportCancelled();
     const name = turntableFileName(state.fileName, options.width, options.height, options.format);

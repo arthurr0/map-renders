@@ -17,13 +17,16 @@ import {
 import { useAppStore } from '../store';
 import { Segmented, SelectField, Slider, Toggle } from './controls';
 import { Icon, IconButton } from './Icon';
+import { useDialogFocus } from './useDialogFocus';
 
 function presetIdFor(width: number, height: number): string {
   const match = RESOLUTION_PRESETS.find((p) => p.width === width && p.height === height);
   return match ? match.id : 'custom';
 }
 
-function SizeFields({
+type DimensionField = 'width' | 'height';
+
+export function SizeFields({
   width,
   height,
   onChange,
@@ -32,54 +35,64 @@ function SizeFields({
   height: number;
   onChange: (width: number, height: number) => void;
 }) {
-  const [locked, setLocked] = useState(true);
-  const ratio = width / height;
+  const [ratio, setRatio] = useState<number | null>(width / height);
+  const [drafts, setDrafts] = useState<Partial<Record<DimensionField, string>>>({});
+  const lastCommit = useRef<[number, number] | null>(null);
+
+  const currentRatio = (): number => {
+    const last = lastCommit.current;
+    if (ratio !== null && last && last[0] === width && last[1] === height) return ratio;
+    return width / height;
+  };
+
+  const commit = (field: DimensionField) => {
+    const draft = drafts[field];
+    if (draft === undefined) return;
+    setDrafts((previous) => ({ ...previous, [field]: undefined }));
+    const value = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(value)) return;
+    if (ratio !== null) {
+      const locked = currentRatio();
+      const next = applyAspectLock(field, value, locked);
+      lastCommit.current = [next.width, next.height];
+      setRatio(locked);
+      onChange(next.width, next.height);
+    } else if (field === 'width') {
+      onChange(clampDimension(value), height);
+    } else {
+      onChange(width, clampDimension(value));
+    }
+  };
+
+  const input = (field: DimensionField, label: string, value: number) => (
+    <label>
+      <span className="field-label">{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={drafts[field] ?? String(value)}
+        onChange={(event) =>
+          setDrafts((previous) => ({ ...previous, [field]: event.target.value }))
+        }
+        onBlur={() => commit(field)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit(field);
+        }}
+      />
+    </label>
+  );
+
+  const locked = ratio !== null;
   return (
     <div className="size-fields">
-      <label>
-        <span className="field-label">Width</span>
-        <input
-          type="number"
-          min={16}
-          max={16384}
-          value={width}
-          onChange={(event) => {
-            const value = Number(event.target.value);
-            if (!Number.isFinite(value)) return;
-            if (locked) {
-              const next = applyAspectLock('width', value, ratio);
-              onChange(next.width, next.height);
-            } else {
-              onChange(clampDimension(value), height);
-            }
-          }}
-        />
-      </label>
+      {input('width', 'Width', width)}
       <IconButton
         icon={locked ? 'link' : 'unlink'}
         label={locked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
         active={locked}
-        onClick={() => setLocked(!locked)}
+        onClick={() => setRatio(locked ? null : width / height)}
       />
-      <label>
-        <span className="field-label">Height</span>
-        <input
-          type="number"
-          min={16}
-          max={16384}
-          value={height}
-          onChange={(event) => {
-            const value = Number(event.target.value);
-            if (!Number.isFinite(value)) return;
-            if (locked) {
-              const next = applyAspectLock('height', value, ratio);
-              onChange(next.width, next.height);
-            } else {
-              onChange(width, clampDimension(value));
-            }
-          }}
-        />
-      </label>
+      {input('height', 'Height', height)}
     </div>
   );
 }
@@ -99,9 +112,7 @@ export function ExportDialog() {
   const updateTurntable = useAppStore((state) => state.updateTurntable);
   const dialog = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (open) dialog.current?.focus();
-  }, [open]);
+  useDialogFocus(open, dialog);
 
   useEffect(() => {
     if (!open) return;

@@ -41,7 +41,7 @@ export function BackgroundSection() {
   const setHdriList = useAppStore((state) => state.setHdriList);
 
   useEffect(() => {
-    if (background.type !== 'hdri' || hdriList.length > 0) return;
+    if (hdriList.length > 0) return;
     let cancelled = false;
     void fetchHdriList().then((list) => {
       if (!cancelled) setHdriList(list);
@@ -49,7 +49,15 @@ export function BackgroundSection() {
     return () => {
       cancelled = true;
     };
-  }, [background.type, hdriList.length, setHdriList]);
+  }, [hdriList.length, setHdriList]);
+
+  const firstHdri = hdriList[0]?.id;
+  const needsHdriId = background.type === 'hdri' && background.id === '';
+  useEffect(() => {
+    if (needsHdriId && firstHdri && background.type === 'hdri') {
+      updateSettings({ background: { ...background, id: firstHdri } });
+    }
+  }, [needsHdriId, firstHdri, background, updateSettings]);
 
   const set = (next: Background) => updateSettings({ background: next });
 

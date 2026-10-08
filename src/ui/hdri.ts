@@ -34,7 +34,7 @@ export function normalizeHdriIndex(raw: unknown): HdriEntry[] {
 
 export async function fetchHdriList(): Promise<HdriEntry[]> {
   try {
-    const response = await fetch('/hdri/index.json');
+    const response = await fetch(`${import.meta.env.BASE_URL}hdri/index.json`);
     if (!response.ok) return [];
     return normalizeHdriIndex(await response.json());
   } catch {
