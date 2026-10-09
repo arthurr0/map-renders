@@ -1,44 +1,82 @@
-import type { BlockState, Direction, RenderLayer } from '../core/types';
+import type { BlockState } from '../core/types';
+import { stateKey } from '../core/volume';
+import {
+  extraTexturesFor,
+  isAlwaysHidden,
+  modelDependsOnNeighbors,
+  neighborVariantKey,
+  resolveModel,
+} from './registry';
+import type { BlockModel, NeighborLookup } from './types';
 
-export interface ModelFace {
-  texture: string;
-  uv?: [number, number, number, number];
-  rotation?: 0 | 90 | 180 | 270;
-  cullface?: 'north' | 'south' | 'east' | 'west' | 'up' | 'down';
-  tint?: 'grass' | 'foliage' | 'water' | 'redstone' | 'none';
+export type {
+  BlockModel,
+  ElementRotation,
+  FaceDir,
+  ModelElement,
+  ModelFace,
+  NeighborLookup,
+  TintKind,
+  Vec3,
+} from './types';
+export {
+  isAlwaysHidden,
+  isKnownBlock,
+  modelDependsOnNeighbors,
+  neighborVariantKey,
+} from './registry';
+export { TINT_HEX, TINT_RGB, hexToRgb, redstoneColor, srgbToLinear, tintColor } from './tints';
+export {
+  DIR_VEC,
+  FACE_DIRS,
+  FULL_COVERAGE,
+  OPPOSITE,
+  autoUV,
+  cornerUVs,
+  faceCorners,
+  faceCoverageRect,
+  onBoundary,
+  rectCells,
+} from './geometry';
+export { PROBE_PROPS, knownBlockNames } from './catalog';
+
+const staticCache = new Map<string, BlockModel | null>();
+
+export function resolveBlockModel(state: BlockState, neighbors: NeighborLookup): BlockModel | null {
+  const base = stateKey(state);
+  const key = modelDependsOnNeighbors(state)
+    ? `${base}|${neighborVariantKey(state, neighbors)}`
+    : base;
+  const cached = staticCache.get(key);
+  if (cached !== undefined) return cached;
+  const model = resolveModel(state, neighbors);
+  staticCache.set(key, model);
+  return model;
 }
 
-export interface ModelElement {
-  from: [number, number, number];
-  to: [number, number, number];
-  rotation?: {
-    origin: [number, number, number];
-    axis: 'x' | 'y' | 'z';
-    angle: number;
-    rescale?: boolean;
-  };
-  faces: Partial<Record<'north' | 'south' | 'east' | 'west' | 'up' | 'down', ModelFace>>;
-  shade?: boolean;
+const WATER_TEXTURES = ['block/water_still', 'block/water_flow'];
+const LAVA_TEXTURES = ['block/lava_still', 'block/lava_flow'];
+
+export function modelTextures(model: BlockModel, out: Set<string>): void {
+  for (const e of model.elements) {
+    for (const f of Object.values(e.faces)) {
+      if (!f) continue;
+      out.add(f.texture);
+      if (f.fallback) for (const t of f.fallback) out.add(t);
+    }
+  }
+  if (model.liquid === 'water') for (const t of WATER_TEXTURES) out.add(t);
+  if (model.liquid === 'lava') for (const t of LAVA_TEXTURES) out.add(t);
 }
 
-export interface BlockModel {
-  elements: ModelElement[];
-  layer: RenderLayer;
-  fullCube: boolean;
-  occludes: Partial<Record<Direction, boolean>>;
-  liquid?: 'water' | 'lava';
-  emissive?: number;
-}
-
-export type NeighborLookup = (dx: number, dy: number, dz: number) => BlockState;
-
-export function resolveBlockModel(
-  _state: BlockState,
-  _neighbors: NeighborLookup,
-): BlockModel | null {
-  throw new Error('not implemented');
-}
-
-export function requiredTextures(_palette: BlockState[]): string[] {
-  throw new Error('not implemented');
+export function requiredTextures(palette: BlockState[]): string[] {
+  const out = new Set<string>();
+  const air: NeighborLookup = () => ({ name: 'minecraft:air', properties: {} });
+  for (const state of palette) {
+    if (isAlwaysHidden(state.name)) continue;
+    const model = resolveBlockModel(state, air);
+    if (model) modelTextures(model, out);
+    for (const t of extraTexturesFor(state)) out.add(t);
+  }
+  return [...out].sort();
 }
