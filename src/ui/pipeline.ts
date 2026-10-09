@@ -76,7 +76,6 @@ export function layerPacks(top: TexturePack, base: TexturePack): TexturePack {
   return {
     id: `${top.id}+${base.id}`,
     name: top.name,
-    attribution: top.attribution,
     async getTexture(textureId) {
       return (await top.getTexture(textureId)) ?? (await base.getTexture(textureId));
     },

@@ -46,7 +46,6 @@ export function createMockPack(id = 'mock'): TexturePack {
   return {
     id,
     name: id,
-    attribution: 'Mock pack',
     getTexture: async () => null,
     getMcmeta: async () => null,
   };

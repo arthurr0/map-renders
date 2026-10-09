@@ -26,4 +26,37 @@ describe('fogRange', () => {
     const thick = fogRange(small, [8, 8, 40], 0.05);
     expect(thick.far - thick.near).toBeLessThan(thin.far - thin.near);
   });
+
+  it('falls back to a default box when there is no model', () => {
+    const radius = Math.hypot(16, 8, 16) / 2;
+    const range = fogRange(null, [0, 4, 40], 0.006);
+    expect(range.near).toBeCloseTo(40 - radius * 0.25);
+    expect(range.far - range.near).toBeCloseTo(radius * 10);
+  });
+
+  it('uses a minimum radius for tiny models', () => {
+    const block: Bounds = { min: [0, 0, 0], max: [1, 1, 1] };
+    const range = fogRange(block, [0.5, 0.5, 20.5], 0.006);
+    expect(range.near).toBeCloseTo(20 - 4 * 0.25);
+    expect(range.far - range.near).toBeCloseTo(4 * 10);
+  });
+
+  it('clamps the fog depth for zero, negative and very high density', () => {
+    const radius = Math.hypot(16, 16, 16) / 2;
+    const camera: [number, number, number] = [8, 8, 40];
+    expect(fogRange(small, camera, 0).far - fogRange(small, camera, 0).near).toBeCloseTo(
+      radius * 60,
+    );
+    expect(fogRange(small, camera, -1).far - fogRange(small, camera, -1).near).toBeCloseTo(
+      radius * 60,
+    );
+    const dense = fogRange(small, camera, 10);
+    expect(dense.far - dense.near).toBeCloseTo(radius * 0.006);
+  });
+
+  it('never puts the fog start behind the camera', () => {
+    const range = fogRange(small, [8, 8, 8], 0.006);
+    expect(range.near).toBe(0);
+    expect(range.far).toBeGreaterThan(0);
+  });
 });

@@ -36,6 +36,8 @@ The UI language is English only.
 
 `pnpm e2e` builds the app, serves it with `vite preview` on port 4179 and runs `e2e/smoke.spec.ts` in Chromium. The test opens `tests/fixtures/village_v3.schem` through the file picker, exports a 1080p PNG and checks the PNG size and that the console stays free of errors.
 
+The script always builds first. If you run `playwright test -c e2e/playwright.config.ts` directly, run `pnpm build` before it, because the preview serves whatever is in `dist/`.
+
 WebGL runs on SwiftShader (software rendering) through the Chromium args `--use-angle=swiftshader --enable-unsafe-swiftshader`, so no GPU is needed. It is slow, a run takes under a minute.
 
 On headless Linux without a display, unset the display variables:

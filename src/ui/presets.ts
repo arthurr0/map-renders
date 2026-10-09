@@ -97,11 +97,16 @@ export const STYLE_PRESETS: StylePreset[] = [
   },
 ];
 
-export function applyPreset(current: RenderSettings, preset: StylePreset): RenderSettings {
+export function applyPreset(
+  current: RenderSettings,
+  preset: StylePreset,
+  textureModeFromPreset = false,
+): RenderSettings {
+  const keptMode = textureModeFromPreset ? 'textured' : current.textureMode;
   return {
     ...DEFAULT_RENDER_SETTINGS,
     ...preset.settings,
-    textureMode: preset.settings.textureMode ?? current.textureMode,
+    textureMode: preset.settings.textureMode ?? keptMode,
     ambientOcclusionVertex: current.ambientOcclusionVertex,
   };
 }

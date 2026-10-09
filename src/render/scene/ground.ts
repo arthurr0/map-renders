@@ -21,6 +21,19 @@ import { GROUND_TERMS, patchBlockShader, type SharedUniforms } from './materials
 import type { Bounds } from '../math/vec';
 
 const GROUND_EXTENT = 12000;
+const GRID_BASE = '#c3c8d0';
+const GRID_LINE = '#6b7280';
+const GRID_LIGHT_LINE = new Color('#dbe8ff');
+const GRID_DARK_LINE = new Color('#4b5563');
+
+export function gridColors(backdrop: string | null): { base: Color; line: Color } {
+  if (!backdrop) return { base: new Color(GRID_BASE), line: new Color(GRID_LINE) };
+  const base = new Color(backdrop);
+  const hsl = { h: 0, s: 0, l: 0 };
+  base.getHSL(hsl);
+  const line = base.clone().lerp(hsl.l < 0.45 ? GRID_LIGHT_LINE : GRID_DARK_LINE, 0.55);
+  return { base, line };
+}
 const GROUND_SEGMENTS = 96;
 
 function createGrassTexture(): CanvasTexture {
@@ -84,6 +97,7 @@ export class Ground {
   private material: Material | null = null;
   private grassTexture: CanvasTexture | null = null;
   private envMap: Texture | null = null;
+  private readonly gridBase = new Color(GRID_BASE);
   private readonly uniforms: Record<string, IUniform> = {
     uGroundCenter: { value: new Vector3() },
     uHalfSize: { value: new Vector2(8, 8) },
@@ -91,7 +105,7 @@ export class Ground {
     uShadowFadeInner: { value: 20 },
     uShadowFadeOuter: { value: 40 },
     uContact: { value: 1 },
-    uGridLineColor: { value: new Color('#6b7280') },
+    uGridLineColor: { value: new Color(GRID_LINE) },
   };
 
   constructor(
@@ -107,6 +121,15 @@ export class Ground {
 
   isWater(): boolean {
     return this.type === 'water';
+  }
+
+  setGridBackdrop(backdrop: string | null): void {
+    const { base, line } = gridColors(backdrop);
+    this.gridBase.copy(base);
+    (this.uniforms.uGridLineColor!.value as Color).copy(line);
+    if (this.type === 'grid' && this.material instanceof MeshStandardMaterial) {
+      this.material.color.copy(base);
+    }
   }
 
   update(type: GroundType, bounds: Bounds | null): void {
@@ -175,7 +198,7 @@ export class Ground {
       }
       case 'grid': {
         const m = new MeshStandardMaterial({
-          color: new Color('#c3c8d0'),
+          color: this.gridBase.clone(),
           roughness: 0.95,
           metalness: 0,
           transparent: true,

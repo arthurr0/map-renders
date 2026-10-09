@@ -4,18 +4,10 @@ import { createLimiter } from './limit';
 export interface TexturePack {
   id: string;
   name: string;
-  attribution: string;
   getTexture(textureId: string): Promise<ImageBitmap | null>;
   getMcmeta(textureId: string): Promise<unknown | null>;
   has?(textureId: string): Promise<boolean>;
 }
-
-export const PIXEL_PERFECTION_ATTRIBUTION = [
-  'Pixel Perfection by XSSheep (Hugh Rutland), licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).',
-  'Original: https://www.minecraftforum.net/forums/mapping-and-modding-java-edition/resource-packs/1242533-pixel-perfection-now-with-polar-bears-1-11',
-  'Updated for newer Minecraft versions by Nova Wostra (Pixel Perfection Legacy, https://modrinth.com/resourcepack/pixel-perfection-legacy), with textures and code from freejusticehere and HexaBlu.',
-  'Modified: only block textures and a few entity textures (chests, beds, signs, bell, decorated pot, mob heads, end portal) were kept, emissive shader variants were removed, files were repacked and listed in a manifest. The same license applies to the bundled files.',
-].join('\n');
 
 const DECODE_OPTIONS: ImageBitmapOptions = {
   premultiplyAlpha: 'none',
@@ -98,7 +90,6 @@ export async function loadBundledPack(): Promise<TexturePack> {
   return {
     id: 'pixel-perfection',
     name: manifest.name ?? 'Pixel Perfection',
-    attribution: PIXEL_PERFECTION_ATTRIBUTION,
     async has(textureId) {
       return resolve(textureId) !== null;
     },
@@ -170,7 +161,6 @@ export async function loadZipPack(file: ArrayBuffer, name: string): Promise<Text
   return {
     id: `zip:${name}`,
     name,
-    attribution: `Resource pack "${name}" supplied by the user.`,
     async has(textureId) {
       return pngs.has(textureId);
     },
@@ -205,7 +195,6 @@ export function layerPacks(primary: TexturePack, fallback: TexturePack): Texture
   return {
     id: `${primary.id}+${fallback.id}`,
     name: `${primary.name} over ${fallback.name}`,
-    attribution: [primary.attribution, fallback.attribution].filter(Boolean).join('\n'),
     async has(textureId) {
       return (await hasIn(primary, textureId)) || (await hasIn(fallback, textureId));
     },

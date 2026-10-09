@@ -296,6 +296,7 @@ export class SceneRenderer {
     const camera = this.rig.makeExportCamera(width / height);
     const settings = this.currentSettings;
     return this.enqueueExport(signal, async () => {
+      this.lighting.updateFog(camera.position);
       const wantsAlpha = options.transparent || settings.background.type === 'transparent';
       const image = await this.withHiddenBackground(wantsAlpha, async () => {
         const session = this.createSession(camera, width, height, options.supersample);
@@ -355,6 +356,7 @@ export class SceneRenderer {
               base.position.copy(offset).applyQuaternion(q).add(target);
               base.quaternion.copy(q).multiply(baseQuat);
               base.updateMatrixWorld();
+              this.lighting.updateFog(base.position);
               this.shared.uTime.value = i / fps;
               const image = await session.renderFrame(base, transparent, undefined, signal);
               if (transparent && options.format === 'webm') {
@@ -386,6 +388,7 @@ export class SceneRenderer {
     const camera = this.rig.makeExportCamera(aspect);
     const transparent = this.currentSettings.background.type === 'transparent';
     return this.enqueueExport(undefined, async () => {
+      this.lighting.updateFog(camera.position);
       const image = await this.withHiddenBackground(transparent, async () => {
         const session = this.createSession(camera, width, height, 2);
         try {
@@ -486,6 +489,10 @@ export class SceneRenderer {
       sunFollowsBackground: this.options.sunFollowsBackground,
       skyClouds: this.options.skyClouds,
     });
+    const bg = s.background;
+    this.ground.setGridBackdrop(
+      bg.type === 'solid' ? bg.color : bg.type === 'gradient' ? bg.bottom : null,
+    );
     this.ground.update(s.ground, this.bounds);
     const extents = groundExtents(this.bounds);
     this.lighting.apply({
@@ -555,7 +562,6 @@ export class SceneRenderer {
       await this.background.whenReady();
       throwIfAborted(signal);
       this.exporting++;
-      this.lighting.updateFog(this.rig.camera.position);
       const time = this.shared.uTime.value;
       try {
         return await job();

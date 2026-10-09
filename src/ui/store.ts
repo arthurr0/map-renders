@@ -12,6 +12,7 @@ import {
 } from '../core';
 import type { TexturePack } from '../textures';
 import { computeBlockStats, type BlockStats } from './blockStats';
+import { applyPreset, type StylePreset } from './presets';
 import {
   loadUi,
   meshOptionsFromSettings,
@@ -72,6 +73,8 @@ export interface AppState {
   updateSettings: (patch: Partial<RenderSettings>) => void;
   replaceSettings: (settings: RenderSettings) => void;
   resetSettings: () => void;
+  textureModeFromPreset: boolean;
+  applyStylePreset: (preset: StylePreset) => void;
 
   meshOptions: MeshOptions;
   updateMeshOptions: (patch: Partial<MeshOptions>) => void;
@@ -192,15 +195,31 @@ export const useAppStore = create<AppState>((set) => ({
   updateSettings: (patch) =>
     set((state) => {
       const settings = { ...state.settings, ...patch };
-      return { settings, meshOptions: mirrorMesh(settings, state.meshOptions, patch) };
+      return {
+        settings,
+        meshOptions: mirrorMesh(settings, state.meshOptions, patch),
+        textureModeFromPreset:
+          patch.textureMode === undefined ? state.textureModeFromPreset : false,
+      };
     }),
   replaceSettings: (settings) =>
     set((state) => ({
       settings,
       meshOptions: mirrorMesh(settings, state.meshOptions, settings),
     })),
+  textureModeFromPreset: false,
+  applyStylePreset: (preset) =>
+    set((state) => {
+      const settings = applyPreset(state.settings, preset, state.textureModeFromPreset);
+      return {
+        settings,
+        meshOptions: mirrorMesh(settings, state.meshOptions, settings),
+        textureModeFromPreset: preset.settings.textureMode !== undefined,
+      };
+    }),
   resetSettings: () =>
     set((state) => ({
+      textureModeFromPreset: false,
       settings: DEFAULT_RENDER_SETTINGS,
       meshOptions: mirrorMesh(DEFAULT_RENDER_SETTINGS, state.meshOptions, DEFAULT_RENDER_SETTINGS),
     })),

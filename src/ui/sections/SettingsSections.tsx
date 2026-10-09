@@ -8,7 +8,7 @@ import {
   Toggle,
 } from '../components/controls';
 import { getRenderer } from '../rendererRef';
-import { STYLE_PRESETS, applyPreset } from '../presets';
+import { STYLE_PRESETS } from '../presets';
 import { useAppStore } from '../store';
 import type { CameraPreset } from '../../render';
 
@@ -299,7 +299,7 @@ export function CameraSection() {
 }
 
 export function PresetsSection() {
-  const replaceSettings = useAppStore((state) => state.replaceSettings);
+  const applyStylePreset = useAppStore((state) => state.applyStylePreset);
   const pushToast = useAppStore((state) => state.pushToast);
   return (
     <Section id="presets" title="Style presets" defaultOpen>
@@ -310,7 +310,7 @@ export function PresetsSection() {
             type="button"
             className="preset"
             onClick={() => {
-              replaceSettings(applyPreset(useAppStore.getState().settings, preset));
+              applyStylePreset(preset);
               pushToast('info', `Applied ${preset.label}`);
             }}
           >

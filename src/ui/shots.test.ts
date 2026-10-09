@@ -29,6 +29,15 @@ describe('shots', () => {
     setRenderer(createMockRenderer());
     expect(await saveCurrentShot()).toBeNull();
     expect(useAppStore.getState().shots).toHaveLength(0);
+    expect(useAppStore.getState().toasts.at(-1)?.message).toBe(
+      'Open a schematic before saving a shot.',
+    );
+  });
+
+  it('explains when the viewport is not ready yet', async () => {
+    setRenderer(null);
+    expect(await saveCurrentShot()).toBeNull();
+    expect(useAppStore.getState().toasts.at(-1)?.message).toBe('The viewport is not ready yet.');
   });
 
   it('numbers new shots after existing ones', () => {

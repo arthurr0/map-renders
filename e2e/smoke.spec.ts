@@ -26,6 +26,7 @@ test('loads the village and exports a 1080p PNG', async ({ page }) => {
   await expect(fileInfo.getByText('village_v3.schem')).toBeVisible();
   await expect(fileInfo.getByText(/[\d,.\s]+ blocks/)).toBeVisible();
   await expect(page.locator('.viewport-overlay[role=status]')).toHaveCount(0);
+  await expect(page.locator('canvas.viewport-canvas')).toBeVisible();
 
   await page.locator('header.app-header').getByRole('button', { name: 'Export' }).click();
   const dialog = page.getByRole('dialog', { name: 'Export' });

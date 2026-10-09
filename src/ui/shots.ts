@@ -25,8 +25,12 @@ export function cleanShotName(name: string, fallback: string): string {
 export async function saveCurrentShot(): Promise<SavedShot | null> {
   const store = useAppStore.getState();
   const renderer = getRenderer();
-  if (!renderer || !store.volume) {
+  if (!store.volume) {
     store.pushToast('info', 'Open a schematic before saving a shot.');
+    return null;
+  }
+  if (!renderer) {
+    store.pushToast('info', 'The viewport is not ready yet.');
     return null;
   }
   const camera = renderer.getCamera();

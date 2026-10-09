@@ -386,20 +386,16 @@ describe('buildAtlas', () => {
     const primary: TexturePack = {
       id: 'p',
       name: 'P',
-      attribution: 'attr p',
       getTexture: async (id) => (id === 'block/anim' ? bitmap(1, 16, 32) : null),
       getMcmeta: async () => null,
     };
     const fallback: TexturePack = {
       id: 'f',
       name: 'F',
-      attribution: 'attr f',
       getTexture: async (id) => (id === 'block/plain' ? bitmap(2, 16, 16) : null),
       getMcmeta: async () => null,
     };
     const layered = layerPacks(primary, fallback);
-    expect(layered.attribution).toContain('attr p');
-    expect(layered.attribution).toContain('attr f');
 
     const { data, image: atlas } = await buildAtlas(
       layered,
@@ -458,6 +454,6 @@ describe('loadZipPack', () => {
     expect(await pack.has?.('block/apple')).toBe(false);
     expect(await pack.getMcmeta('block/water_still')).toEqual({ animation: { frametime: 2 } });
     expect(await pack.getMcmeta('block/stone')).toBeNull();
-    expect(pack.attribution).toContain('My Pack');
+    expect(pack.name).toBe('My Pack');
   });
 });

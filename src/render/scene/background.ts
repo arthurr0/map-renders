@@ -97,8 +97,7 @@ function createSky(): Sky {
   material.uniforms.uHorizonAway = { value: new Color() };
   material.uniforms.uGlow = { value: new Color() };
   material.uniforms.uHaze = { value: 0.2 };
-  material.uniforms.uDisc = { value: 1 };
-  material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\nuniform vec3 uZenith;\nuniform vec3 uHorizon;\nuniform vec3 uHorizonAway;\nuniform vec3 uGlow;\nuniform float uHaze;\nuniform float uDisc;\n${material.fragmentShader
+  material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\nuniform vec3 uZenith;\nuniform vec3 uHorizon;\nuniform vec3 uHorizonAway;\nuniform vec3 uGlow;\nuniform float uHaze;\n${material.fragmentShader
     .replace(
       'vec3 direction = normalize( vWorldPosition - cameraPosition );',
       `vec3 rawDirection = normalize( vWorldPosition - cameraPosition );
@@ -123,7 +122,7 @@ function createSky(): Sky {
         float cosSun = max( dot( rawDirection, vSunDirection ), 0.0 );
         float glowWide = pow( cosSun, mix( 10.0, 4.0, uHaze ) ) * 0.28;
         float glowTight = pow( cosSun, 90.0 ) * 0.9;
-        float disc = smoothstep( 0.99965, 0.99985, cosSun ) * 14.0 * uDisc * showSunDisc;
+        float disc = smoothstep( 0.99965, 0.99985, cosSun ) * 14.0 * showSunDisc;
         float sunUp = smoothstep( -0.12, 0.02, vSunDirection.y );
         skyColor += uGlow * ( glowWide + glowTight + disc ) * sunUp;
         texColor = skyColor / max( skyIntensity, 1e-3 );
