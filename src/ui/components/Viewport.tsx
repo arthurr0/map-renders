@@ -89,14 +89,13 @@ function Landing({ dragging }: { dragging: boolean }) {
           Sponge .schem (v1 to v3), Litematica .litematic and structure block .nbt files from
           Minecraft 1.13 and newer. Everything runs in your browser, files are never uploaded.
         </p>
-        <a
+        <button
+          type="button"
           className="credit"
-          href="https://creativecommons.org/licenses/by-sa/4.0/"
-          target="_blank"
-          rel="noreferrer"
+          onClick={() => useAppStore.getState().setCreditsOpen(true)}
         >
           Textures: Pixel Perfection, CC BY-SA 4.0
-        </a>
+        </button>
       </div>
     </div>
   );

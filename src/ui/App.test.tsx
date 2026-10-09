@@ -28,7 +28,15 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  useAppStore.setState({ volume: null, fileName: null, exportOpen: false, helpOpen: false });
+  useAppStore.setState({
+    volume: null,
+    fileName: null,
+    exportOpen: false,
+    helpOpen: false,
+    creditsOpen: false,
+    packSource: 'bundled',
+    packName: null,
+  });
 });
 
 describe('App', () => {
@@ -67,6 +75,59 @@ describe('App', () => {
     render(<App />);
     fireEvent.keyDown(window, { key: '?' });
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy();
+  });
+
+  it('opens the credits dialog with real links from the textures section', () => {
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: 'Credits' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Credits and licenses' }));
+    const dialog = screen.getByRole('dialog', { name: 'Credits' });
+    const links = Array.from(dialog.querySelectorAll('a'));
+    const hrefs = links.map((link) => link.getAttribute('href'));
+    expect(hrefs).toContain('https://creativecommons.org/licenses/by-sa/4.0/');
+    expect(hrefs).toContain('https://modrinth.com/resourcepack/pixel-perfection-legacy');
+    expect(hrefs).toContain('https://polyhaven.com/a/meadow_2');
+    expect(hrefs).toContain('https://polyhaven.com/license');
+    for (const link of links) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noreferrer');
+    }
+    expect(dialog.textContent).toContain('XSSheep');
+    expect(screen.queryByText('Your resource pack')).toBeNull();
+  });
+
+  it('closes the credits dialog with Escape and the close button', () => {
+    render(<App />);
+    act(() => useAppStore.getState().setCreditsOpen(true));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Credits' })).toBeNull();
+    act(() => useAppStore.getState().setCreditsOpen(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Close credits' }));
+    expect(screen.queryByRole('dialog', { name: 'Credits' })).toBeNull();
+  });
+
+  it('opens the credits dialog from the landing credit link', () => {
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Textures: Pixel Perfection, CC BY-SA 4.0' }),
+    );
+    expect(screen.getByRole('dialog', { name: 'Credits' })).toBeTruthy();
+  });
+
+  it('mentions a user supplied pack and the fallback in the credits dialog', () => {
+    useAppStore.setState({ packSource: 'zip', packName: 'my-pack.zip' });
+    render(<App />);
+    act(() => useAppStore.getState().setCreditsOpen(true));
+    const dialog = screen.getByRole('dialog', { name: 'Credits' });
+    expect(dialog.textContent).toContain('my-pack.zip is supplied by you');
+    expect(dialog.textContent).toContain('fall back to Pixel Perfection');
+  });
+
+  it('ignores shortcuts while the credits dialog is open', () => {
+    render(<App />);
+    act(() => useAppStore.getState().setCreditsOpen(true));
+    fireEvent.keyDown(window, { key: 't' });
+    expect(useAppStore.getState().settings.textureMode).toBe('textured');
   });
 
   it('toggles the texture mode with T', () => {
