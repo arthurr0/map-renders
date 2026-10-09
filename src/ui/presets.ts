@@ -38,7 +38,7 @@ export const STYLE_PRESETS: StylePreset[] = [
       shadows: { enabled: true, softness: 2, mapSize: 4096 },
       ssao: { enabled: true, intensity: 1, radius: 0.5 },
       bloom: { enabled: true, strength: 0.25, threshold: 0.85, radius: 0.5 },
-      fog: { enabled: true, density: 0.004, color: '#e8d2b8' },
+      fog: { enabled: true, density: 0.009, color: '#e8d2b8' },
       toneMapping: 'neutral',
       exposure: 1.05,
     },
