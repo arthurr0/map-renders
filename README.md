@@ -65,7 +65,7 @@ docker run --rm -p 8080:8080 map-renders
 
 Then open http://localhost:8080.
 
-With Compose (builds the image and starts it with a read-only root filesystem, a tmpfs for `/tmp`, all capabilities dropped and `no-new-privileges`):
+With Compose (builds the image and starts it with a read-only root filesystem, a tmpfs for `/tmp`, all capabilities dropped, `no-new-privileges`, process and 128 MB memory limits, and the port bound to 127.0.0.1 only):
 
 ```
 docker compose up --build
@@ -91,20 +91,20 @@ Image details:
 
 The workflow is `.github/workflows/ci.yml`.
 
-| Event                            | Checks, e2e | Image build | Image push                         |
-| -------------------------------- | ----------- | ----------- | ---------------------------------- |
-| Pull request                     | yes         | yes         | no                                 |
-| Push to `master`                 | yes         | yes         | `latest`, `sha-<short>`            |
-| Push of a tag `vX.Y.Z`           | yes         | yes         | `X.Y.Z`, `X.Y`, `X`                |
-| Manual run (`workflow_dispatch`) | yes         | yes         | yes, tags depend on the chosen ref |
+| Event                            | Checks, e2e | Image build | Image push                    |
+| -------------------------------- | ----------- | ----------- | ----------------------------- |
+| Pull request                     | yes         | yes         | no                            |
+| Push to `master`                 | yes         | yes         | `latest`, `sha-<short>`       |
+| Push of a tag `vX.Y.Z`           | yes         | yes         | `X.Y.Z`, `X.Y`, `X`           |
+| Manual run (`workflow_dispatch`) | yes         | yes         | only on `master` or a tag ref |
 
 Jobs:
 
 - `checks`: `pnpm install --frozen-lockfile`, typecheck, lint, unit tests
 - `e2e`: installs Chromium with system dependencies and runs `pnpm e2e`. On failure the Playwright report and traces are uploaded as an artifact
-- `image`: runs after both jobs pass, builds for amd64 and arm64 with QEMU and Buildx, uses the GitHub Actions cache and attaches provenance and SBOM attestations. Pull requests build the image but never log in or push, so PRs from forks work without secrets
+- `image`: runs after both jobs pass, builds for amd64 and arm64 with Buildx (the Node build always runs natively on the build host, and the nginx stage only copies files, so no emulation is needed), uses the GitHub Actions cache and attaches provenance and SBOM attestations. Pull requests build the image but never log in or push, so PRs from forks work without secrets
 
-Concurrency: a new run for the same branch or PR cancels the older one. Tag runs are never cancelled.
+Concurrency: a new run for the same PR or non-master branch cancels the older one. Runs on `master` and on tags are never cancelled.
 
 Release:
 
@@ -118,6 +118,10 @@ After the workflow finishes, the image is available as `ghcr.io/<owner>/map-rend
 GHCR visibility: a package published for the first time is private by default. To make it public, open the repository owner's Packages page on GitHub, select `map-renders`, go to Package settings, and under Danger Zone choose Change visibility, then Public. Also make sure the package has repository access with write role for Actions (Package settings, Manage Actions access), otherwise later pushes can be denied.
 
 Dependabot (`.github/dependabot.yml`) opens weekly grouped updates for GitHub Actions, the Docker base images and npm packages.
+
+## License
+
+The app code is MIT licensed, see `LICENSE`. The bundled Pixel Perfection texture pack is CC BY-SA 4.0 and the HDRIs are CC0. Details are in `THIRD_PARTY_LICENSES.md` and `public/hdri/LICENSES.md`.
 
 ## Module map
 

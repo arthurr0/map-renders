@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   checks:
@@ -106,7 +106,6 @@ jobs:
       REGISTRY: ghcr.io
       OWNER: ${{ github.repository_owner }}
       IS_MASTER: ${{ github.ref == 'refs/heads/master' }}
-      IS_BRANCH: ${{ github.ref_type == 'branch' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -114,9 +113,9 @@ jobs:
 
       - name: Compute image name
         id: image
-        run: echo "name=${REGISTRY}/${OWNER,,}/map-renders" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
+        run: |
+          echo "name=${REGISTRY}/${OWNER,,}/map-renders" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
 
@@ -128,8 +127,6 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ env.IS_MASTER == 'true' }}
             type=sha,format=short,prefix=sha-,enable=${{ env.IS_MASTER == 'true' }}
-            type=ref,event=branch,enable=${{ env.IS_BRANCH == 'true' && env.IS_MASTER != 'true' }}
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -148,11 +145,10 @@ jobs:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && steps.meta.outputs.tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ github.ref_type == 'tag' && steps.meta.outputs.version || steps.image.outputs.short }}
             REVISION=${{ github.sha }}
             SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
