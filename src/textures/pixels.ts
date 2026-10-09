@@ -13,13 +13,6 @@ export interface AnimationLayout {
   firstFrame: number;
 }
 
-export interface GridLayout {
-  width: number;
-  height: number;
-  cols: number;
-  rows: number;
-}
-
 export function nextPow2(value: number): number {
   let result = 1;
   while (result < value) result *= 2;
@@ -113,22 +106,26 @@ export function extractFrame(image: RgbaImage, layout: AnimationLayout): RgbaIma
   return { width: side, height: side, data };
 }
 
-export function scaleNearest(image: RgbaImage, size: number): RgbaImage {
-  if (image.width === size && image.height === size) return image;
-  const data = new Uint8ClampedArray(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    const sy = Math.min(image.height - 1, Math.floor((y * image.height) / size));
-    for (let x = 0; x < size; x++) {
-      const sx = Math.min(image.width - 1, Math.floor((x * image.width) / size));
+export function resizeNearest(image: RgbaImage, width: number, height: number): RgbaImage {
+  if (image.width === width && image.height === height) return image;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(image.height - 1, Math.floor((y * image.height) / height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(image.width - 1, Math.floor((x * image.width) / width));
       const src = (sy * image.width + sx) * 4;
-      const dst = (y * size + x) * 4;
+      const dst = (y * width + x) * 4;
       data[dst] = image.data[src] ?? 0;
       data[dst + 1] = image.data[src + 1] ?? 0;
       data[dst + 2] = image.data[src + 2] ?? 0;
       data[dst + 3] = image.data[src + 3] ?? 0;
     }
   }
-  return { width: size, height: size, data };
+  return { width, height, data };
+}
+
+export function scaleNearest(image: RgbaImage, size: number): RgbaImage {
+  return resizeNearest(image, size, size);
 }
 
 export function solidTile(size: number, color: readonly [number, number, number]): RgbaImage {
@@ -145,23 +142,73 @@ export function solidTile(size: number, color: readonly [number, number, number]
   return { width: size, height: size, data };
 }
 
-export function chooseGrid(count: number, cell: number, maxSize: number): GridLayout | null {
-  const total = Math.max(1, count);
-  let best: GridLayout | null = null;
-  for (let width = nextPow2(cell); width <= maxSize; width *= 2) {
-    const cols = Math.floor(width / cell);
-    if (cols < 1) continue;
-    const rows = Math.ceil(total / cols);
-    const height = nextPow2(rows * cell);
-    if (height <= maxSize) {
-      const area = width * height;
-      const bestArea = best ? best.width * best.height : Infinity;
-      const bestMax = best ? Math.max(best.width, best.height) : Infinity;
-      if (area < bestArea || (area === bestArea && Math.max(width, height) < bestMax)) {
-        best = { width, height, cols, rows };
-      }
+export interface Placement {
+  x: number;
+  y: number;
+}
+
+export interface AtlasLayout {
+  width: number;
+  height: number;
+  cols: number;
+  blockRows: number;
+  entityPlacements: Placement[];
+}
+
+interface ShelfResult {
+  placements: Placement[];
+  height: number;
+}
+
+function shelfPack(
+  rects: Array<{ w: number; h: number }>,
+  width: number,
+  startY: number,
+): ShelfResult | null {
+  const order = rects
+    .map((_rect, index) => index)
+    .sort((a, b) => (rects[b]?.h ?? 0) - (rects[a]?.h ?? 0) || a - b);
+  const placements: Placement[] = new Array<Placement>(rects.length);
+  let x = 0;
+  let y = startY;
+  let shelfHeight = 0;
+  for (const index of order) {
+    const rect = rects[index];
+    if (!rect || rect.w > width) return null;
+    if (x + rect.w > width) {
+      y += shelfHeight;
+      x = 0;
+      shelfHeight = 0;
     }
-    if (cols >= total) break;
+    placements[index] = { x, y };
+    x += rect.w;
+    shelfHeight = Math.max(shelfHeight, rect.h);
+  }
+  return { placements, height: y + shelfHeight - startY };
+}
+
+export function layoutAtlas(
+  blockCount: number,
+  cell: number,
+  entityRects: Array<{ w: number; h: number }>,
+  maxSize: number,
+): AtlasLayout | null {
+  const widest = entityRects.reduce((max, rect) => Math.max(max, rect.w), cell);
+  let best: AtlasLayout | null = null;
+  for (let width = nextPow2(widest); width <= maxSize; width *= 2) {
+    const cols = Math.max(1, Math.floor(width / cell));
+    const blockRows = Math.ceil(blockCount / cols);
+    const blockHeight = blockRows * cell;
+    const shelves = shelfPack(entityRects, width, blockHeight);
+    if (!shelves) continue;
+    const height = nextPow2(Math.max(cell, blockHeight + shelves.height));
+    if (height > maxSize) continue;
+    const area = width * height;
+    const bestArea = best ? best.width * best.height : Infinity;
+    const bestMax = best ? Math.max(best.width, best.height) : Infinity;
+    if (area < bestArea || (area === bestArea && Math.max(width, height) < bestMax)) {
+      best = { width, height, cols, blockRows, entityPlacements: shelves.placements };
+    }
   }
   return best;
 }
@@ -211,13 +258,13 @@ export function blitPadded(
   cellY: number,
   padding: number,
 ): void {
-  const size = tile.width;
-  const cell = size + padding * 2;
-  for (let y = 0; y < cell; y++) {
-    const sy = Math.min(size - 1, Math.max(0, y - padding));
-    for (let x = 0; x < cell; x++) {
-      const sx = Math.min(size - 1, Math.max(0, x - padding));
-      const src = (sy * size + sx) * 4;
+  const cellWidth = tile.width + padding * 2;
+  const cellHeight = tile.height + padding * 2;
+  for (let y = 0; y < cellHeight; y++) {
+    const sy = Math.min(tile.height - 1, Math.max(0, y - padding));
+    for (let x = 0; x < cellWidth; x++) {
+      const sx = Math.min(tile.width - 1, Math.max(0, x - padding));
+      const src = (sy * tile.width + sx) * 4;
       const dst = ((cellY + y) * destWidth + cellX + x) * 4;
       dest[dst] = tile.data[src] ?? 0;
       dest[dst + 1] = tile.data[src + 1] ?? 0;
