@@ -1,4 +1,4 @@
-import { el, face, part, single, type FaceInput, type Part } from '../build';
+import { box, el, face, part, single, type Part } from '../build';
 import {
   flag,
   num,
@@ -10,7 +10,7 @@ import {
   type Ctx,
   type Family,
 } from '../context';
-import { materialTextures, stripWaxed, WOODS } from '../materials';
+import { materialTextures, stripWaxed } from '../materials';
 import type { BlockState } from '../../core/types';
 import type { ModelElement } from '../types';
 import { cubeAll, cube, columnFaces } from './cubes';
@@ -509,21 +509,9 @@ export const pressurePlateFamily: Family = {
   build: (ctx) => {
     const t = plateTexture(ctx.name);
     const down = flag(ctx, 'powered') || num(ctx, 'power', 0) > 0;
-    return single([box16(1, 0, 1, 15, down ? 0.5 : 1, 15, t)], { solid: false });
+    return single([box([1, 0, 1], [15, down ? 0.5 : 1, 15], t)], { solid: false });
   },
 };
-
-function box16(
-  x0: number,
-  y0: number,
-  z0: number,
-  x1: number,
-  y1: number,
-  z1: number,
-  t: FaceInput,
-): ModelElement {
-  return el([x0, y0, z0], [x1, y1, z1], { down: t, up: t, north: t, south: t, west: t, east: t });
-}
 
 export const carpetFamily: Family = {
   id: 'carpet',
@@ -532,14 +520,14 @@ export const carpetFamily: Family = {
     const base = ctx.name.slice(0, -'_carpet'.length);
     const t =
       base === 'moss' ? 'moss_block' : base === 'pale_moss' ? 'pale_moss_carpet' : `${base}_wool`;
-    return single([box16(0, 0, 0, 16, 1, 16, t)], { solid: false });
+    return single([box([0, 0, 0], [16, 1, 16], t)], { solid: false });
   },
 };
 
 export const paleMossCarpetFamily: Family = {
   id: 'pale_moss_carpet',
   match: (name) => name === 'pale_moss_carpet',
-  build: () => single([box16(0, 0, 0, 16, 1, 16, 'pale_moss_carpet')], { solid: false }),
+  build: () => single([box([0, 0, 0], [16, 1, 16], 'pale_moss_carpet')], { solid: false }),
 };
 
 export const snowLayerFamily: Family = {
@@ -548,11 +536,6 @@ export const snowLayerFamily: Family = {
   build: (ctx) => {
     const layers = Math.max(1, Math.min(8, num(ctx, 'layers', 1)));
     if (layers >= 8) return cubeAll('snow');
-    return single([box16(0, 0, 0, 16, layers * 2, 16, 'snow')], { solid: layers > 1 });
+    return single([box([0, 0, 0], [16, layers * 2, 16], 'snow')], { solid: layers > 1 });
   },
 };
-
-export function woodPlanks(name: string): string | null {
-  for (const w of WOODS) if (name === w) return `${w}_planks`;
-  return null;
-}

@@ -13,7 +13,7 @@ import {
   type Family,
   type Orientation,
 } from '../context';
-import { COLORS, WOODS, stripWaxed } from '../materials';
+import { stripWaxed } from '../materials';
 import { TINT_RGB } from '../tints';
 import type { ModelFace } from '../types';
 
@@ -652,10 +652,6 @@ export const waxedFamily: Family = {
   },
 };
 
-const LEGACY_ALIASES: Record<string, string> = {
-  grass_path: 'dirt_path',
-};
-
 export function unknownCube(ctx: Ctx): ModelSpec {
   const n = ctx.name;
   const hasAxis = ctx.props.axis !== undefined;
@@ -674,10 +670,3 @@ export function unknownCube(ctx: Ctx): ModelSpec {
   }
   return cubeAll(n, opts);
 }
-
-export function legacyAlias(name: string): string {
-  return LEGACY_ALIASES[name] ?? name;
-}
-
-export const KNOWN_COLORS = COLORS;
-export const KNOWN_WOODS = WOODS;

@@ -18,30 +18,33 @@ import {
 } from './families/cubes';
 import {
   anvilFamily,
+  cakeFamily,
+  candleFamily,
+  cauldronFamily,
+  composterFamily,
+  farmlandFamily,
+  hopperFamily,
+  ladderFamily,
+} from './families/containers';
+import {
   bannerFamily,
   bedFamily,
   bellFamily,
-  cakeFamily,
-  campfireFamily,
-  candleFamily,
-  cauldronFamily,
-  chainFamily,
   chestFamily,
-  composterFamily,
-  enchantingTableFamily,
-  endRodFamily,
-  farmlandFamily,
-  fireFamily,
   headFamily,
-  hopperFamily,
-  ladderFamily,
-  lanternFamily,
-  leverFamily,
-  portalFamily,
-  railFamily,
   signFamily,
+} from './families/furniture';
+import {
+  campfireFamily,
+  chainFamily,
+  endRodFamily,
+  fireFamily,
+  lanternFamily,
+  portalFamily,
   torchFamily,
-} from './families/misc';
+} from './families/lights';
+import { leverFamily, railFamily, redstonePartsFamily } from './families/redstone';
+import { workstationFamily } from './families/workstations';
 import {
   amethystFamily,
   azaleaFamily,
@@ -157,7 +160,8 @@ export const FAMILIES: Family[] = [
   campfireFamily,
   fireFamily,
   portalFamily,
-  enchantingTableFamily,
+  workstationFamily,
+  redstonePartsFamily,
   simpleCrossFamily,
   tintedCrossFamily,
   doublePlantFamily,

@@ -87,13 +87,6 @@ export function materialTextures(baseName: string): MaterialTextures {
   return same(base);
 }
 
-export function woodOf(name: string): string | null {
-  for (const w of [...WOODS].sort((a, b) => b.length - a.length)) {
-    if (name.startsWith(`${w}_`)) return w;
-  }
-  return null;
-}
-
 export function colorOf(name: string): string | null {
   for (const c of [...COLORS].sort((a, b) => b.length - a.length)) {
     if (name.startsWith(`${c}_`)) return c;

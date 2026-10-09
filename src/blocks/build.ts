@@ -62,13 +62,9 @@ export function sides(input: FaceInput, extra?: Partial<ModelFace>): FaceMap {
   return { north: f, south: f, west: f, east: f };
 }
 
-export function box(
-  from: Vec3,
-  to: Vec3,
-  input: FaceInput,
-  extra?: Partial<ModelFace>,
-): ModelElement {
-  return el(from, to, all(input, extra));
+export function box(from: Vec3, to: Vec3, input: FaceInput | FaceMap): ModelElement {
+  if (typeof input === 'string' || 'texture' in input) return el(from, to, all(input as FaceInput));
+  return el(from, to, input);
 }
 
 export function columnFaces(side: FaceInput, end: FaceInput, bottom?: FaceInput): FaceMap {
@@ -81,17 +77,6 @@ export function part(elements: ModelElement[], x = 0, y = 0, uvlock = false): Pa
 
 export function single(elements: ModelElement[], opts: Omit<ModelSpec, 'parts'> = {}): ModelSpec {
   return { parts: [{ elements }], ...opts };
-}
-
-export function withFaces(elements: ModelElement[], extra: Partial<ModelFace>): ModelElement[] {
-  return elements.map((e) => {
-    const faces: Partial<Record<FaceDir, ModelFace>> = {};
-    for (const dir of FACE_DIRS) {
-      const f = e.faces[dir];
-      if (f) faces[dir] = { ...f, ...extra };
-    }
-    return { ...e, faces };
-  });
 }
 
 export function finalize(spec: ModelSpec): BlockModel {
