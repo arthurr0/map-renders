@@ -57,4 +57,7 @@ Modules depend only on `src/core/` and on the public `index.ts` of other modules
 
 ## Credits
 
-- Texture pack: Pixel Perfection, licensed under CC BY-SA 4.0. Author, source link and license link to be added when the pack is bundled.
+- Texture pack: Pixel Perfection by XSSheep (Hugh Rutland), licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). Original: https://www.minecraftforum.net/forums/mapping-and-modding-java-edition/resource-packs/1242533-pixel-perfection-now-with-polar-bears-1-11
+- Updated for newer Minecraft versions by Nova Wostra (Pixel Perfection Legacy 26.3-97.1, https://modrinth.com/resourcepack/pixel-perfection-legacy), with contributions from freejusticehere and HexaBlu.
+- Modifications: only block textures were kept, emissive shader variants were removed, animation metadata was merged into a manifest, the files are served individually from `public/packs/pixel-perfection/`. The bundled textures stay under CC BY-SA 4.0.
+- Full details and license text: `THIRD_PARTY_LICENSES.md` and `public/packs/pixel-perfection/LICENSE.txt`.
