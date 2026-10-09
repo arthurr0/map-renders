@@ -40,6 +40,10 @@ body,
   margin: 0;
 }
 
+html {
+  overflow: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -348,6 +352,7 @@ input[type='checkbox'] {
 }
 
 .toggle {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
