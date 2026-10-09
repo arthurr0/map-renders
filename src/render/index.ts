@@ -46,11 +46,19 @@ export class SceneRenderer {
     throw new Error('not implemented');
   }
 
-  renderImage(_options: ExportOptions, _onProgress?: (p: number) => void): Promise<Blob> {
+  renderImage(
+    _options: ExportOptions,
+    _onProgress?: (p: number) => void,
+    _signal?: AbortSignal,
+  ): Promise<Blob> {
     throw new Error('not implemented');
   }
 
-  renderTurntable(_options: TurntableOptions, _onProgress?: (p: number) => void): Promise<Blob> {
+  renderTurntable(
+    _options: TurntableOptions,
+    _onProgress?: (p: number) => void,
+    _signal?: AbortSignal,
+  ): Promise<Blob> {
     throw new Error('not implemented');
   }
 

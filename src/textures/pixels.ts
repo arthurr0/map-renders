@@ -1,0 +1,275 @@
+import type { RenderLayer } from '../core/types';
+
+export interface RgbaImage {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+}
+
+export interface AnimationLayout {
+  frameWidth: number;
+  frameHeight: number;
+  frames: number;
+  firstFrame: number;
+}
+
+export function nextPow2(value: number): number {
+  let result = 1;
+  while (result < value) result *= 2;
+  return result;
+}
+
+export function classifyLayer(data: ArrayLike<number>): RenderLayer {
+  let hasTransparent = false;
+  let hasPartial = false;
+  for (let i = 3; i < data.length; i += 4) {
+    const alpha = data[i] ?? 0;
+    if (alpha === 255) continue;
+    if (alpha === 0) hasTransparent = true;
+    else {
+      hasPartial = true;
+      break;
+    }
+  }
+  if (hasPartial) return 'translucent';
+  return hasTransparent ? 'cutout' : 'opaque';
+}
+
+export function averageColor(data: ArrayLike<number>): [number, number, number, number] {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let alphaSum = 0;
+  const pixels = Math.floor(data.length / 4);
+  for (let i = 0; i < pixels; i++) {
+    const a = data[i * 4 + 3] ?? 0;
+    r += (data[i * 4] ?? 0) * a;
+    g += (data[i * 4 + 1] ?? 0) * a;
+    b += (data[i * 4 + 2] ?? 0) * a;
+    alphaSum += a;
+  }
+  if (alphaSum === 0 || pixels === 0) return [0, 0, 0, 0];
+  return [r / alphaSum / 255, g / alphaSum / 255, b / alphaSum / 255, alphaSum / (pixels * 255)];
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+export function resolveAnimation(width: number, height: number, mcmeta: unknown): AnimationLayout {
+  const animation =
+    mcmeta && typeof mcmeta === 'object'
+      ? ((mcmeta as Record<string, unknown>).animation as Record<string, unknown> | undefined)
+      : undefined;
+  const hasAnimation = animation !== undefined && typeof animation === 'object';
+  let frameWidth = width;
+  let frameHeight = height;
+  if (hasAnimation) {
+    const aw = numberOr(animation.width, 0);
+    const ah = numberOr(animation.height, 0);
+    frameWidth = aw > 0 && aw <= width ? aw : width;
+    frameHeight = ah > 0 && ah <= height ? ah : aw > 0 ? Math.min(aw, height) : width;
+  } else if (height > width && height % width === 0) {
+    frameHeight = width;
+  }
+  if (frameHeight > height || frameHeight <= 0) frameHeight = height;
+  const columns = Math.max(1, Math.floor(width / frameWidth));
+  const rows = Math.max(1, Math.floor(height / frameHeight));
+  const frames = columns * rows;
+  let firstFrame = 0;
+  if (hasAnimation && Array.isArray(animation.frames) && animation.frames.length > 0) {
+    const first: unknown = animation.frames[0];
+    const index =
+      typeof first === 'number'
+        ? first
+        : first && typeof first === 'object'
+          ? (first as Record<string, unknown>).index
+          : 0;
+    if (typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < frames) {
+      firstFrame = index;
+    }
+  }
+  return { frameWidth, frameHeight, frames, firstFrame };
+}
+
+export function extractFrame(image: RgbaImage, layout: AnimationLayout): RgbaImage {
+  const { frameWidth, frameHeight, firstFrame } = layout;
+  const columns = Math.max(1, Math.floor(image.width / frameWidth));
+  const originX = (firstFrame % columns) * frameWidth;
+  const originY = Math.floor(firstFrame / columns) * frameHeight;
+  const side = Math.min(frameWidth, frameHeight);
+  const data = new Uint8ClampedArray(side * side * 4);
+  for (let y = 0; y < side; y++) {
+    const srcStart = ((originY + y) * image.width + originX) * 4;
+    data.set(image.data.subarray(srcStart, srcStart + side * 4), y * side * 4);
+  }
+  return { width: side, height: side, data };
+}
+
+export function resizeNearest(image: RgbaImage, width: number, height: number): RgbaImage {
+  if (image.width === width && image.height === height) return image;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(image.height - 1, Math.floor((y * image.height) / height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(image.width - 1, Math.floor((x * image.width) / width));
+      const src = (sy * image.width + sx) * 4;
+      const dst = (y * width + x) * 4;
+      data[dst] = image.data[src] ?? 0;
+      data[dst + 1] = image.data[src + 1] ?? 0;
+      data[dst + 2] = image.data[src + 2] ?? 0;
+      data[dst + 3] = image.data[src + 3] ?? 0;
+    }
+  }
+  return { width, height, data };
+}
+
+export function scaleNearest(image: RgbaImage, size: number): RgbaImage {
+  return resizeNearest(image, size, size);
+}
+
+export function solidTile(size: number, color: readonly [number, number, number]): RgbaImage {
+  const data = new Uint8ClampedArray(size * size * 4);
+  const r = Math.round(color[0] * 255);
+  const g = Math.round(color[1] * 255);
+  const b = Math.round(color[2] * 255);
+  for (let i = 0; i < size * size; i++) {
+    data[i * 4] = r;
+    data[i * 4 + 1] = g;
+    data[i * 4 + 2] = b;
+    data[i * 4 + 3] = 255;
+  }
+  return { width: size, height: size, data };
+}
+
+export interface Placement {
+  x: number;
+  y: number;
+}
+
+export interface AtlasLayout {
+  width: number;
+  height: number;
+  cols: number;
+  blockRows: number;
+  entityPlacements: Placement[];
+}
+
+interface ShelfResult {
+  placements: Placement[];
+  height: number;
+}
+
+function shelfPack(
+  rects: Array<{ w: number; h: number }>,
+  width: number,
+  startY: number,
+): ShelfResult | null {
+  const order = rects
+    .map((_rect, index) => index)
+    .sort((a, b) => (rects[b]?.h ?? 0) - (rects[a]?.h ?? 0) || a - b);
+  const placements: Placement[] = new Array<Placement>(rects.length);
+  let x = 0;
+  let y = startY;
+  let shelfHeight = 0;
+  for (const index of order) {
+    const rect = rects[index];
+    if (!rect || rect.w > width) return null;
+    if (x + rect.w > width) {
+      y += shelfHeight;
+      x = 0;
+      shelfHeight = 0;
+    }
+    placements[index] = { x, y };
+    x += rect.w;
+    shelfHeight = Math.max(shelfHeight, rect.h);
+  }
+  return { placements, height: y + shelfHeight - startY };
+}
+
+export function layoutAtlas(
+  blockCount: number,
+  cell: number,
+  entityRects: Array<{ w: number; h: number }>,
+  maxSize: number,
+): AtlasLayout | null {
+  const widest = entityRects.reduce((max, rect) => Math.max(max, rect.w), cell);
+  let best: AtlasLayout | null = null;
+  for (let width = nextPow2(widest); width <= maxSize; width *= 2) {
+    const cols = Math.max(1, Math.floor(width / cell));
+    const blockRows = Math.ceil(blockCount / cols);
+    const blockHeight = blockRows * cell;
+    const shelves = shelfPack(entityRects, width, blockHeight);
+    if (!shelves) continue;
+    const height = nextPow2(Math.max(cell, blockHeight + shelves.height));
+    if (height > maxSize) continue;
+    const area = width * height;
+    const bestArea = best ? best.width * best.height : Infinity;
+    const bestMax = best ? Math.max(best.width, best.height) : Infinity;
+    if (area < bestArea || (area === bestArea && Math.max(width, height) < bestMax)) {
+      best = { width, height, cols, blockRows, entityPlacements: shelves.placements };
+    }
+  }
+  return best;
+}
+
+export function bleedTransparent(image: RgbaImage): RgbaImage {
+  const { width, height, data } = image;
+  const count = width * height;
+  const visited = new Uint8Array(count);
+  const queue = new Int32Array(count);
+  let head = 0;
+  let tail = 0;
+  for (let i = 0; i < count; i++) {
+    if ((data[i * 4 + 3] ?? 0) > 0) {
+      visited[i] = 1;
+      queue[tail++] = i;
+    }
+  }
+  if (tail === 0 || tail === count) return image;
+  const out = new Uint8ClampedArray(data);
+  while (head < tail) {
+    const index = queue[head++] ?? 0;
+    const x = index % width;
+    const y = Math.floor(index / width);
+    const neighbors = [
+      x > 0 ? index - 1 : -1,
+      x < width - 1 ? index + 1 : -1,
+      y > 0 ? index - width : -1,
+      y < height - 1 ? index + width : -1,
+    ];
+    for (const next of neighbors) {
+      if (next < 0 || visited[next]) continue;
+      visited[next] = 1;
+      out[next * 4] = out[index * 4] ?? 0;
+      out[next * 4 + 1] = out[index * 4 + 1] ?? 0;
+      out[next * 4 + 2] = out[index * 4 + 2] ?? 0;
+      queue[tail++] = next;
+    }
+  }
+  return { width, height, data: out };
+}
+
+export function blitPadded(
+  dest: Uint8ClampedArray,
+  destWidth: number,
+  tile: RgbaImage,
+  cellX: number,
+  cellY: number,
+  padding: number,
+): void {
+  const cellWidth = tile.width + padding * 2;
+  const cellHeight = tile.height + padding * 2;
+  for (let y = 0; y < cellHeight; y++) {
+    const sy = Math.min(tile.height - 1, Math.max(0, y - padding));
+    for (let x = 0; x < cellWidth; x++) {
+      const sx = Math.min(tile.width - 1, Math.max(0, x - padding));
+      const src = (sy * tile.width + sx) * 4;
+      const dst = ((cellY + y) * destWidth + cellX + x) * 4;
+      dest[dst] = tile.data[src] ?? 0;
+      dest[dst + 1] = tile.data[src + 1] ?? 0;
+      dest[dst + 2] = tile.data[src + 2] ?? 0;
+      dest[dst + 3] = tile.data[src + 3] ?? 0;
+    }
+  }
+}
