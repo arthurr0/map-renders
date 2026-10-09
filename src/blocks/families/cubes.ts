@@ -148,11 +148,11 @@ export const CUBE_TABLE: Record<string, (ctx: Ctx) => ModelSpec> = {
     'reinforced_deepslate_bottom',
   ),
   mycelium: (ctx) =>
-    flag(ctx, 'snowy')
+    snowyAbove(ctx)
       ? cube(columnFaces('grass_block_snow', 'snow', 'dirt'))
       : cube(columnFaces('mycelium_side', 'mycelium_top', 'dirt')),
   podzol: (ctx) =>
-    flag(ctx, 'snowy')
+    snowyAbove(ctx)
       ? cube(columnFaces('grass_block_snow', 'snow', 'dirt'))
       : cube(columnFaces('podzol_side', 'podzol_top', 'dirt')),
   crimson_nylium: staticColumn('crimson_nylium_side', 'crimson_nylium', 'netherrack'),
@@ -498,7 +498,9 @@ function scaffolding(ctx: Ctx): ModelSpec {
   return single(elements, { layer: 'cutout', shadeOccluder: false });
 }
 
-function snowyAbove(ctx: Ctx): boolean {
+export const SNOWY_BLOCKS = new Set(['grass_block', 'podzol', 'mycelium']);
+
+export function snowyAbove(ctx: Ctx): boolean {
   if (ctx.props.snowy !== undefined) return ctx.props.snowy === 'true';
   const above = ctx.neighbors(0, 1, 0).name;
   return (
@@ -633,7 +635,10 @@ export const infestedFamily: Family = {
 export const shulkerBoxFamily: Family = {
   id: 'shulker_box',
   match: (name) => name === 'shulker_box' || name.endsWith('_shulker_box'),
-  build: (ctx) => cubeAll(ctx.name),
+  build: (ctx) => {
+    const color = ctx.name === 'shulker_box' ? 'purple' : ctx.name.slice(0, -'_shulker_box'.length);
+    return cubeAll(face(ctx.name, { fallback: [`block/${color}_terracotta`] }));
+  },
 };
 
 export const copperGrateFamily: Family = {

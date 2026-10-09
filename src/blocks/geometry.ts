@@ -264,7 +264,21 @@ export function faceCoverageRect(from: Vec3, to: Vec3, dir: FaceDir): UV {
   return [from[2], from[1], to[2], to[1]];
 }
 
-export function coversFullSide(elements: ModelElement[], dir: FaceDir): boolean {
+export const FULL_COVERAGE = 0xffff;
+
+export function rectCells(a0: number, b0: number, a1: number, b1: number): number {
+  let mask = 0;
+  for (let i = 0; i < 4; i++) {
+    if (a1 <= i * 4 + 1e-4 || a0 >= (i + 1) * 4 - 1e-4) continue;
+    for (let j = 0; j < 4; j++) {
+      if (b1 <= j * 4 + 1e-4 || b0 >= (j + 1) * 4 - 1e-4) continue;
+      mask |= 1 << (i * 4 + j);
+    }
+  }
+  return mask;
+}
+
+export function coverageMask(elements: ModelElement[], dir: FaceDir): number {
   const grid = new Uint8Array(256);
   for (const el of elements) {
     if (el.rotation && el.rotation.angle !== 0) continue;
@@ -281,6 +295,20 @@ export function coversFullSide(elements: ModelElement[], dir: FaceDir): boolean 
       }
     }
   }
-  for (let i = 0; i < 256; i++) if (!grid[i]) return false;
-  return true;
+  let mask = 0;
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      let full = true;
+      for (let a = i * 4; a < i * 4 + 4 && full; a++) {
+        for (let b = j * 4; b < j * 4 + 4; b++) {
+          if (!grid[a * 16 + b]) {
+            full = false;
+            break;
+          }
+        }
+      }
+      if (full) mask |= 1 << (i * 4 + j);
+    }
+  }
+  return mask;
 }

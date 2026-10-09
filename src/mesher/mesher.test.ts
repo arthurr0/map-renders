@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { MeshBuffers, MeshOptions, MeshResult } from '../core/types';
+import type { MeshBuffers, MeshOptions, MeshResult, SchematicVolume } from '../core/types';
 import { AO_LEVELS, buildMesh } from './index';
-import { atlasFor, readSpongeV3, VolumeBuilder } from './test-utils';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { parseSchematic } from '../schematic';
+import { atlasFor, VolumeBuilder } from './test-utils';
 
-const NODE_FS = 'node:fs';
-
-async function readFixture(name: string): Promise<Uint8Array> {
-  const fs = await import(NODE_FS);
-  const here = import.meta.url;
-  return new Uint8Array(fs.readFileSync(new URL(`../../tests/fixtures/${name}`, here)));
+function loadFixture(name: string): SchematicVolume {
+  const file = readFileSync(resolve(__dirname, '../../tests/fixtures', name));
+  return parseSchematic(new Uint8Array(file).slice().buffer, name);
 }
 
 const textured: MeshOptions = {
@@ -151,6 +151,40 @@ describe('ambient occlusion', () => {
   });
 });
 
+describe('partial face culling', () => {
+  it('culls coplanar stair faces between neighbours', () => {
+    const k = 'oak_stairs[facing=east,half=bottom,shape=straight]';
+    const r = mesh(new VolumeBuilder(1, 1, 2).set(0, 0, 0, k).set(0, 0, 1, k));
+    expect(r.stats.faces).toBe(2 * 11 - 4);
+  });
+
+  it('keeps faces only partly covered by the neighbour', () => {
+    const r = mesh(
+      new VolumeBuilder(1, 2, 2)
+        .set(0, 0, 0, 'stone')
+        .set(0, 1, 0, 'stone')
+        .set(0, 0, 1, 'oak_slab[type=bottom]'),
+    );
+    expect(r.stats.faces).toBe(10 + 5);
+  });
+});
+
+describe('neighbour dependent blocks', () => {
+  it('resolves snowy grass from the block above and caches variants', () => {
+    const v = new VolumeBuilder(64, 2, 64).fill(0, 0, 0, 63, 0, 63, 'grass_block');
+    v.set(0, 1, 0, 'snow[layers=1]');
+    const volume = v.build();
+    const atlas = atlasFor(volume);
+    expect(Object.keys(atlas.regions)).toContain('block/grass_block_snow');
+    const t0 = performance.now();
+    const r = buildMesh(volume, atlas, { ...textured, ambientOcclusion: true });
+    const dt = performance.now() - t0;
+    expect(dt).toBeLessThan(400);
+    const overlay = r.meshes.filter((m) => m.layer === 'cutout');
+    expect(overlay.length).toBeGreaterThan(0);
+  });
+});
+
 describe('liquids', () => {
   it('lone water source has averaged corner heights', () => {
     const r = mesh(new VolumeBuilder(3, 1, 3).set(1, 0, 1, 'water[level=0]'));
@@ -194,6 +228,28 @@ describe('liquids', () => {
     );
     expect(r.meshes.some((m) => m.isWater)).toBe(true);
     expect(r.meshes.some((m) => m.layer === 'opaque' && !m.isWater)).toBe(true);
+  });
+
+  it('insets water sides and skips sides covered by the waterlogged block', () => {
+    const r = mesh(
+      new VolumeBuilder(1, 1, 1).set(
+        0,
+        0,
+        0,
+        'oak_stairs[facing=east,half=bottom,shape=straight,waterlogged=true]',
+      ),
+    );
+    const water = r.meshes.find((m) => m.isWater)!;
+    const n = water.normals.length / 3;
+    let east = 0;
+    for (let i = 0; i < n; i++) {
+      const nx = water.normals[i * 3]!;
+      const nz = water.normals[i * 3 + 2]!;
+      if (nx > 0.5) east++;
+      if (Math.abs(nx) > 0.5) expect([0, 1]).not.toContain(water.positions[i * 3]);
+      if (Math.abs(nz) > 0.5) expect([0, 1]).not.toContain(water.positions[i * 3 + 2]);
+    }
+    expect(east).toBe(0);
   });
 
   it('water faces against waterlogged neighbours are culled', () => {
@@ -351,8 +407,8 @@ describe('simplified mode', () => {
 });
 
 describe('performance', () => {
-  it('meshes the village fixture quickly', async () => {
-    const volume = readSpongeV3(await readFixture('village_v3.schem'));
+  it('meshes the village fixture quickly', () => {
+    const volume = loadFixture('village_v3.schem');
     expect(volume.width).toBe(64);
     const atlas = atlasFor(volume);
     buildMesh(volume, atlas, { ...textured, ambientOcclusion: true });
@@ -367,6 +423,17 @@ describe('performance', () => {
     );
     expect(r.stats.unknownBlocks).toEqual([]);
     expect(dt).toBeLessThan(300);
+  });
+
+  it('meshes a large field of grass without properties quickly', () => {
+    const v = new VolumeBuilder(256, 1, 256).fill(0, 0, 0, 255, 0, 255, 'grass_block');
+    const volume = v.build();
+    const atlas = atlasFor(volume);
+    const t0 = performance.now();
+    const r = buildMesh(volume, atlas, { ...textured, ambientOcclusion: true });
+    const dt = performance.now() - t0;
+    console.log(`grass 256x256 ${dt.toFixed(0)} ms, ${r.stats.faces} faces`);
+    expect(dt).toBeLessThan(1000);
   });
 
   it('handles a dense 256^3 volume', () => {

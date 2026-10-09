@@ -1,4 +1,4 @@
-import { el, face, part, type ModelSpec, type Part } from '../build';
+import { box as b, el, face, part, single, type ModelSpec, type Part } from '../build';
 import { flag, num, orientUpFront, prop, yaw, YAW_NORTH, type Ctx, type Family } from '../context';
 import { redstoneColor } from '../tints';
 import type { ModelElement, ModelFace, Vec3 } from '../types';
@@ -156,6 +156,8 @@ export const redstonePartsFamily: Family = {
 };
 
 const REDSTONE_PARTS = [
+  'daylight_detector',
+  'tripwire_hook',
   'tripwire',
   'redstone_wire',
   'repeater',
@@ -168,6 +170,37 @@ const REDSTONE_PARTS = [
 function buildRedstonePart(ctx: Ctx): ModelSpec | null {
   const facingYaw = (table = YAW_NORTH) => yaw(table, prop(ctx, 'facing', 'north'));
   switch (ctx.name) {
+    case 'daylight_detector': {
+      const top = flag(ctx, 'inverted')
+        ? 'daylight_detector_inverted_top'
+        : 'daylight_detector_top';
+      return single(
+        [
+          el([0, 0, 0], [16, 6, 16], {
+            down: 'daylight_detector_side',
+            up: top,
+            north: 'daylight_detector_side',
+            south: 'daylight_detector_side',
+            west: 'daylight_detector_side',
+            east: 'daylight_detector_side',
+          }),
+        ],
+        { solid: true },
+      );
+    }
+    case 'tripwire_hook': {
+      const elements = [
+        b([6.2, 3.8, 14], [9.8, 11.4, 16], 'oak_planks'),
+        el([7.5, 6, 9], [8.5, 7, 14], {
+          down: 'tripwire_hook',
+          up: 'tripwire_hook',
+          west: 'tripwire_hook',
+          east: 'tripwire_hook',
+        }),
+        b([7, 5, 7], [9, 8, 9], 'tripwire_hook'),
+      ];
+      return { parts: [part(elements, 0, facingYaw())], ...cutout };
+    }
     case 'tripwire':
       return flatLines(ctx, 'tripwire', 1.5, null, 0.5);
     case 'redstone_wire':

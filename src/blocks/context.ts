@@ -15,6 +15,8 @@ export interface Family {
   match: (name: string) => boolean;
   build: Builder;
   dynamic?: (ctx: Omit<Ctx, 'neighbors'>) => boolean;
+  variantKey?: (ctx: Ctx) => string;
+  extraTextures?: (ctx: Omit<Ctx, 'neighbors'>) => string[];
 }
 
 export function prop(ctx: Ctx, key: string, fallback: string): string {

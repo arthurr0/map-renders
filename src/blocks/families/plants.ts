@@ -92,6 +92,13 @@ const SIMPLE_CROSS = new Set([
   'mangrove_propagule',
 ]);
 
+export const paleHangingMossFamily: Family = {
+  id: 'pale_hanging_moss',
+  match: (name) => name === 'pale_hanging_moss',
+  build: (ctx) =>
+    cross(prop(ctx, 'tip', 'true') === 'true' ? 'pale_hanging_moss_tip' : 'pale_hanging_moss'),
+};
+
 const TINTED_CROSS: Record<string, { texture: string; fallback?: string[] }> = {
   short_grass: { texture: 'short_grass', fallback: ['block/grass'] },
   grass: { texture: 'grass', fallback: ['block/short_grass'] },
@@ -156,8 +163,12 @@ export const doublePlantFamily: Family = {
   build: (ctx) => {
     const upper = prop(ctx, 'half', 'lower') === 'upper';
     const cfg = DOUBLE_PLANTS[ctx.name]!;
-    const t = `${ctx.name}_${upper ? 'top' : 'bottom'}`;
-    const f = face(t, cfg.tinted ? GRASS_TINT : {});
+    const f =
+      ctx.name === 'pitcher_plant'
+        ? face(`pitcher_crop_${upper ? 'top' : 'bottom'}_stage_4`, {
+            fallback: [`block/pitcher_crop_${upper ? 'top' : 'bottom'}`],
+          })
+        : face(`${ctx.name}_${upper ? 'top' : 'bottom'}`, cfg.tinted ? GRASS_TINT : {});
     if (ctx.name === 'sunflower' && upper) {
       const head = el(
         [9.6, -1, 1],
@@ -199,7 +210,11 @@ export const pitcherCropFamily: Family = {
   match: (name) => name === 'pitcher_crop',
   build: (ctx) => {
     const upper = prop(ctx, 'half', 'lower') === 'upper';
-    return cross(upper ? 'pitcher_crop_top' : 'pitcher_crop_bottom');
+    const age = Math.max(0, Math.min(4, num(ctx, 'age', 0)));
+    const half = upper ? 'top' : 'bottom';
+    return cross(
+      face(`pitcher_crop_${half}_stage_${age}`, { fallback: [`block/pitcher_crop_${half}`] }),
+    );
   },
 };
 
@@ -434,7 +449,9 @@ export const pointedDripstoneFamily: Family = {
   build: (ctx) => {
     const dir = prop(ctx, 'vertical_direction', 'up');
     const thickness = prop(ctx, 'thickness', 'tip');
-    return cross(`pointed_dripstone_${dir}_${thickness}`);
+    return cross(
+      face(`pointed_dripstone_${dir}_${thickness}`, { fallback: ['block/dripstone_block'] }),
+    );
   },
 };
 

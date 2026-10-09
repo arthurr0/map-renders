@@ -41,6 +41,7 @@ export class GeometryBuilder {
 
   quad(
     pos: ArrayLike<number>,
+    posOffset: number,
     ox: number,
     oy: number,
     oz: number,
@@ -48,6 +49,7 @@ export class GeometryBuilder {
     ny: number,
     nz: number,
     uv: ArrayLike<number>,
+    uvOffset: number,
     col: ArrayLike<number>,
     em: number,
     flip: boolean,
@@ -63,17 +65,17 @@ export class GeometryBuilder {
     const E = this.emissive;
     for (let i = 0; i < 4; i++) {
       const o = p3 + i * 3;
-      P[o] = pos[i * 3]! + ox;
-      P[o + 1] = pos[i * 3 + 1]! + oy;
-      P[o + 2] = pos[i * 3 + 2]! + oz;
+      P[o] = pos[posOffset + i * 3]! + ox;
+      P[o + 1] = pos[posOffset + i * 3 + 1]! + oy;
+      P[o + 2] = pos[posOffset + i * 3 + 2]! + oz;
       N[o] = nx;
       N[o + 1] = ny;
       N[o + 2] = nz;
       C[o] = col[i * 3]!;
       C[o + 1] = col[i * 3 + 1]!;
       C[o + 2] = col[i * 3 + 2]!;
-      U[p2 + i * 2] = uv[i * 2]!;
-      U[p2 + i * 2 + 1] = uv[i * 2 + 1]!;
+      U[p2 + i * 2] = uv[uvOffset + i * 2]!;
+      U[p2 + i * 2 + 1] = uv[uvOffset + i * 2 + 1]!;
       E[base + i] = em;
     }
     const I = this.indices;

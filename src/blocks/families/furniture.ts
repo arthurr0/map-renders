@@ -1,8 +1,8 @@
 import { box as b, el, face, part } from '../build';
 import { num, prop, yaw, YAW_NORTH, type Family } from '../context';
-import { colorOf, WOODS } from '../materials';
+import { colorOf, stripWaxed, WOODS } from '../materials';
 import type { ModelElement } from '../types';
-import { entityBox, rect, yawParts, type TexSize } from './entity';
+import { blockEntityBox, entityBox, rect, yawParts, type TexSize } from './entity';
 import { cutout } from './common';
 
 function bedTexture(name: string): string {
@@ -72,9 +72,9 @@ export const chestFamily: Family = {
     if (type === 'single' || kind === 'ender') {
       const t = `entity/chest/${kind}`;
       elements.push(
-        entityBox([1, 0, 1], [15, 10, 15], t, size, { u: 0, v: 19, dx: 14, dy: 10, dz: 14 }),
-        entityBox([1, 10, 1], [15, 14, 15], t, size, { u: 0, v: 0, dx: 14, dy: 5, dz: 14 }),
-        entityBox([7, 7, 0], [9, 11, 1], t, size, { u: 0, v: 0, dx: 2, dy: 4, dz: 1 }),
+        blockEntityBox([1, 0, 1], [15, 10, 15], t, size, { u: 0, v: 19, dx: 14, dy: 10, dz: 14 }),
+        blockEntityBox([1, 10, 1], [15, 14, 15], t, size, { u: 0, v: 0, dx: 14, dy: 5, dz: 14 }),
+        blockEntityBox([7, 7, 0], [9, 11, 1], t, size, { u: 0, v: 0, dx: 2, dy: 4, dz: 1 }),
       );
     } else {
       const t = `entity/chest/${kind}_${type}`;
@@ -82,9 +82,9 @@ export const chestFamily: Family = {
       const x0 = left ? 1 : 0;
       const x1 = left ? 16 : 15;
       elements.push(
-        entityBox([x0, 0, 1], [x1, 10, 15], t, size, { u: 0, v: 19, dx: 15, dy: 10, dz: 14 }),
-        entityBox([x0, 10, 1], [x1, 14, 15], t, size, { u: 0, v: 0, dx: 15, dy: 5, dz: 14 }),
-        entityBox(left ? [15, 7, 0] : [0, 7, 0], left ? [16, 11, 1] : [1, 11, 1], t, size, {
+        blockEntityBox([x0, 0, 1], [x1, 10, 15], t, size, { u: 0, v: 19, dx: 15, dy: 10, dz: 14 }),
+        blockEntityBox([x0, 10, 1], [x1, 14, 15], t, size, { u: 0, v: 0, dx: 15, dy: 5, dz: 14 }),
+        blockEntityBox(left ? [15, 7, 0] : [0, 7, 0], left ? [16, 11, 1] : [1, 11, 1], t, size, {
           u: 0,
           v: 0,
           dx: 1,
@@ -265,14 +265,14 @@ export const bellFamily: Family = {
     const elements: ModelElement[] = [];
     const bodyTop = attachment === 'ceiling' ? 12 : 13;
     elements.push(
-      entityBox([5, bodyTop - 7, 5], [11, bodyTop, 11], t, size, {
+      blockEntityBox([5, bodyTop - 7, 5], [11, bodyTop, 11], t, size, {
         u: 0,
         v: 0,
         dx: 6,
         dy: 7,
         dz: 6,
       }),
-      entityBox([4, bodyTop - 9, 4], [12, bodyTop - 7, 12], t, size, {
+      blockEntityBox([4, bodyTop - 9, 4], [12, bodyTop - 7, 12], t, size, {
         u: 0,
         v: 13,
         dx: 8,
@@ -295,6 +295,76 @@ export const bellFamily: Family = {
     }
     return {
       parts: [part(elements, 0, yaw(YAW_NORTH, prop(ctx, 'facing', 'north')))],
+      shadeOccluder: false,
+      solid: true,
+    };
+  },
+};
+
+export const shelfFamily: Family = {
+  id: 'shelf',
+  match: (name) => name.endsWith('_shelf') && name !== 'bookshelf',
+  build: (ctx) => {
+    const t = ctx.name;
+    const f = (uv: [number, number, number, number]) => face(t, { uv });
+    const elements = [
+      el([0, 0, 8], [16, 16, 16], {
+        down: f([0, 11, 16, 16]),
+        up: f([0, 8, 16, 11]),
+        north: f([0, 0, 8, 8]),
+        south: f([8, 0, 16, 8]),
+        west: f([0, 11, 4, 16]),
+        east: f([0, 11, 4, 16]),
+      }),
+    ];
+    return {
+      parts: [part(elements, 0, yaw(YAW_NORTH, prop(ctx, 'facing', 'north')))],
+      shadeOccluder: false,
+      solid: true,
+    };
+  },
+};
+
+export const copperGolemStatueFamily: Family = {
+  id: 'copper_golem_statue',
+  match: (name) => name.endsWith('copper_golem_statue'),
+  build: (ctx) => {
+    const stage = stripWaxed(ctx.name).replace('copper_golem_statue', '');
+    const t = stage ? `${stage}copper` : 'copper_block';
+    const elements = [
+      b([4, 0, 5], [12, 6, 11], t),
+      b([3, 6, 4], [13, 12, 12], t),
+      b([7, 12, 7], [9, 15, 9], t),
+      b([6, 15, 6], [10, 16, 10], t),
+    ];
+    return {
+      parts: [part(elements, 0, yaw(YAW_NORTH, prop(ctx, 'facing', 'north')))],
+      shadeOccluder: false,
+      solid: true,
+    };
+  },
+};
+
+export const driedGhastFamily: Family = {
+  id: 'dried_ghast',
+  match: (name) => name === 'dried_ghast',
+  build: (ctx) => {
+    const h = Math.max(0, Math.min(3, num(ctx, 'hydration', 0)));
+    const t = (side: string) =>
+      face(`dried_ghast_hydration_${h}_${side}`, { fallback: ['block/calcite'] });
+    const elements = [
+      el([3, 0, 3], [13, 10, 13], {
+        down: t('bottom'),
+        up: t('top'),
+        north: t('north'),
+        south: t('south'),
+        west: t('west'),
+        east: t('east'),
+      }),
+    ];
+    return {
+      parts: [part(elements, 0, yaw(YAW_NORTH, prop(ctx, 'facing', 'north')))],
+      layer: 'cutout',
       shadeOccluder: false,
       solid: true,
     };

@@ -2,6 +2,7 @@ import { box as b, el, face, part, single, type ModelSpec } from '../build';
 import { flag, num, prop, yaw, YAW_NORTH, type Ctx, type Family } from '../context';
 import type { ModelElement } from '../types';
 import { cutout } from './common';
+import { blockEntityBox, rect } from './entity';
 
 function cubeLike(t: string): ModelSpec {
   return single([b([0, 0, 0], [16, 16, 16], t)], { layer: 'cutout', shadeOccluder: false });
@@ -28,7 +29,6 @@ export const workstationFamily: Family = {
 const WORKSTATIONS = [
   'enchanting_table',
   'stonecutter',
-  'daylight_detector',
   'end_portal_frame',
   'lectern',
   'grindstone',
@@ -41,7 +41,6 @@ const WORKSTATIONS = [
   'chorus_plant',
   'chorus_flower',
   'decorated_pot',
-  'tripwire_hook',
   'powder_snow',
 ];
 
@@ -76,24 +75,6 @@ function buildWorkstation(ctx: Ctx): ModelSpec | null {
         el([1, 9, 8], [15, 16, 8], { north: saw, south: saw }, { shade: false }),
       ];
       return { parts: [part(elements, 0, facingYaw())], layer: 'cutout', solid: true };
-    }
-    case 'daylight_detector': {
-      const top = flag(ctx, 'inverted')
-        ? 'daylight_detector_inverted_top'
-        : 'daylight_detector_top';
-      return single(
-        [
-          el([0, 0, 0], [16, 6, 16], {
-            down: 'daylight_detector_side',
-            up: top,
-            north: 'daylight_detector_side',
-            south: 'daylight_detector_side',
-            west: 'daylight_detector_side',
-            east: 'daylight_detector_side',
-          }),
-        ],
-        { solid: true },
-      );
     }
     case 'end_portal_frame': {
       const s = 'end_portal_frame_side';
@@ -246,37 +227,21 @@ function buildWorkstation(ctx: Ctx): ModelSpec | null {
     case 'chorus_flower':
       return cubeLike(num(ctx, 'age', 0) >= 5 ? 'chorus_flower_dead' : 'chorus_flower');
     case 'decorated_pot': {
-      const side = face('entity/decorated_pot/decorated_pot_side', { uv: [1, 0, 15, 16] });
-      const base = face('entity/decorated_pot/decorated_pot_base', { uv: [0, 0, 14, 14] });
+      const sheet = 'entity/decorated_pot/decorated_pot_base';
+      const size = { w: 32, h: 32 };
+      const side = face('entity/decorated_pot/decorated_pot_side', { uv: [0, 0, 16, 16] });
       const elements = [
         el([1, 0, 1], [15, 16, 15], {
-          down: base,
-          up: base,
+          down: rect(sheet, size, [14, 13, 28, 27]),
+          up: rect(sheet, size, [0, 13, 14, 27]),
           north: side,
           south: side,
           west: side,
           east: side,
         }),
-        b(
-          [4, 16, 4],
-          [12, 17, 12],
-          face('entity/decorated_pot/decorated_pot_base', { uv: [0, 0, 8, 8] }),
-        ),
+        blockEntityBox([4, 16, 4], [12, 19, 12], sheet, size, { u: 0, v: 0, dx: 8, dy: 3, dz: 8 }),
       ];
       return { parts: [part(elements, 0, facingYaw())], solid: true, shadeOccluder: false };
-    }
-    case 'tripwire_hook': {
-      const elements = [
-        b([6.2, 3.8, 14], [9.8, 11.4, 16], 'oak_planks'),
-        el([7.5, 6, 9], [8.5, 7, 14], {
-          down: 'tripwire_hook',
-          up: 'tripwire_hook',
-          west: 'tripwire_hook',
-          east: 'tripwire_hook',
-        }),
-        b([7, 5, 7], [9, 8, 9], 'tripwire_hook'),
-      ];
-      return { parts: [part(elements, 0, facingYaw())], ...cutout };
     }
     case 'powder_snow':
       return single([b([0, 0, 0], [16, 16, 16], 'powder_snow')], {

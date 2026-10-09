@@ -126,6 +126,11 @@ function hasConnectionProps(props: Record<string, string>): boolean {
   return HORIZONTAL.some((d) => props[d] !== undefined);
 }
 
+function connectionKey(ctx: Ctx, test: (n: BlockState) => boolean): string {
+  const c = connections(ctx, test);
+  return HORIZONTAL.map((d) => (c[d] ? '1' : '0')).join('');
+}
+
 function connections(ctx: Ctx, test: (n: BlockState) => boolean): Conn {
   const out: Conn = { north: false, east: false, south: false, west: false };
   for (const d of HORIZONTAL) {
@@ -176,7 +181,9 @@ export const fenceFamily: Family = {
   id: 'fence',
   match: (name) => name.endsWith('_fence'),
   dynamic: (ctx) => !hasConnectionProps(ctx.props),
+  variantKey: (ctx) => connectionKey(ctx, fenceLike),
   build: (ctx) => {
+    if (ctx.name === 'bamboo_fence') return bambooFence(connections(ctx, fenceLike));
     const t = fenceTexture(ctx.name);
     const conn = connections(ctx, fenceLike);
     const post = el([6, 0, 6], [10, 16, 10], {
@@ -197,11 +204,39 @@ export const fenceFamily: Family = {
   },
 };
 
+function bambooFence(conn: Conn) {
+  const t = (uv: [number, number, number, number]) =>
+    face('bamboo_fence', { uv, fallback: ['block/bamboo_planks'] });
+  const post = el([6, 0, 6], [10, 16, 10], {
+    down: t([12, 0, 16, 4]),
+    up: t([12, 0, 16, 4]),
+    north: t([0, 0, 4, 16]),
+    south: t([4, 0, 8, 16]),
+    west: t([8, 0, 12, 16]),
+    east: t([0, 0, 4, 16]),
+  });
+  const rail = (y0: number, y1: number, v: number) =>
+    el([7, y0, 0], [9, y1, 9], {
+      down: t([12, 4, 14, 13]),
+      up: t([12, 4, 14, 13]),
+      north: t([14, v, 16, v + 3]),
+      west: t([0, 13, 9, 16]),
+      east: t([0, 13, 9, 16]),
+    });
+  const parts: Part[] = [part([post])];
+  const rails = [rail(12, 15, 4), rail(6, 9, 8)];
+  for (const d of HORIZONTAL) if (conn[d]) parts.push(part(rails, 0, sideYaw[d], true));
+  return { parts };
+}
+
 export const fenceGateFamily: Family = {
   id: 'fence_gate',
   match: (name) => name.endsWith('_fence_gate'),
   build: (ctx) => {
-    const t = materialTextures(baseOf(ctx.name, '_fence_gate')).side;
+    const t =
+      ctx.name === 'bamboo_fence_gate'
+        ? face('bamboo_fence_gate', { fallback: ['block/bamboo_planks'] })
+        : materialTextures(baseOf(ctx.name, '_fence_gate')).side;
     const open = flag(ctx, 'open');
     const dy = flag(ctx, 'in_wall') ? -3 : 0;
     const b = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) =>
@@ -245,6 +280,7 @@ export const wallFamily: Family = {
   id: 'wall',
   match: (name) => name.endsWith('_wall'),
   dynamic: (ctx) => !hasConnectionProps(ctx.props),
+  variantKey: (ctx) => connectionKey(ctx, wallLike),
   build: (ctx) => {
     const t = wallTexture(ctx.name);
     const parts: Part[] = [];
@@ -298,6 +334,7 @@ export const paneFamily: Family = {
   id: 'pane',
   match: (name) => name === 'glass_pane' || name.endsWith('_stained_glass_pane'),
   dynamic: (ctx) => !hasConnectionProps(ctx.props),
+  variantKey: (ctx) => connectionKey(ctx, paneLike),
   build: (ctx) => {
     const { pane, edge } = paneTextures(ctx.name);
     const conn = connections(ctx, paneLike);
@@ -346,6 +383,7 @@ export const ironBarsFamily: Family = {
   match: (name) =>
     name === 'iron_bars' || /^(waxed_)?(exposed_|weathered_|oxidized_)?copper_bars$/.test(name),
   dynamic: (ctx) => !hasConnectionProps(ctx.props),
+  variantKey: (ctx) => connectionKey(ctx, paneLike),
   build: (ctx) => {
     const t = stripWaxed(ctx.name);
     const conn = connections(ctx, paneLike);

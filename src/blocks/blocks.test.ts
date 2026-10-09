@@ -193,6 +193,51 @@ describe('connections', () => {
   });
 });
 
+describe('entity and newer blocks', () => {
+  it('maps chest lid top to the full sheet coordinates', () => {
+    const m = model('minecraft:chest[facing=north,type=single,waterlogged=false]');
+    const lid = m.elements[1]!;
+    expect(lid.faces.up!.texture).toBe('entity/chest/normal');
+    expect(lid.faces.up!.uv).toEqual([7, 0, 10.5, 3.5]);
+    const front = lid.faces.north!.uv!;
+    expect(front[0]).toBeCloseTo(10.5);
+    expect(front[1]).toBeGreaterThan(front[3]);
+  });
+
+  it('uses grown pitcher textures and the new blocks resolve', () => {
+    expect(model('minecraft:pitcher_plant[half=upper]').elements[0]!.faces.north!.texture).toBe(
+      'block/pitcher_crop_top_stage_4',
+    );
+    for (const k of [
+      'minecraft:oak_shelf[facing=north]',
+      'minecraft:copper_golem_statue[facing=south]',
+      'minecraft:dried_ghast[facing=east,hydration=2]',
+      'minecraft:pale_hanging_moss[tip=true]',
+      'minecraft:bamboo_fence[east=true,north=false,south=false,west=false]',
+      'minecraft:bamboo_fence_gate[facing=north,open=false]',
+    ]) {
+      expect(model(k).unknown).toBeUndefined();
+    }
+    expect(
+      model('minecraft:bamboo_fence[east=true,north=false,south=false,west=false]').elements[0]!
+        .faces.north!.texture,
+    ).toBe('block/bamboo_fence');
+  });
+
+  it('declares snow textures for neighbour dependent grass', () => {
+    expect(requiredTextures([parseStateKey('minecraft:grass_block')])).toEqual(
+      expect.arrayContaining(['block/grass_block_snow', 'block/snow']),
+    );
+  });
+
+  it('exposes coarse coverage masks', () => {
+    const slab = model('minecraft:oak_slab[type=bottom]');
+    expect(slab.coverage?.down).toBe(0xffff);
+    expect(slab.coverage?.north).toBeGreaterThan(0);
+    expect(slab.coverage?.north).toBeLessThan(0xffff);
+  });
+});
+
 describe('other families', () => {
   it('doors, trapdoors, torches, lanterns, plants resolve', () => {
     expect(

@@ -32,6 +32,35 @@ export function boxFaceRects(b: BoxUV): Record<FaceDir, Rect> {
   };
 }
 
+export function blockEntityFaceRects(b: BoxUV): Record<FaceDir, Rect> {
+  const { u, v, dx, dy, dz } = b;
+  const top = v + dz;
+  const bottom = v + dz + dy;
+  return {
+    up: [u + dz + dx, v, u + dz + 2 * dx, v + dz],
+    down: [u + dz, v, u + dz + dx, v + dz],
+    north: [u + 2 * dz + dx, bottom, u + 2 * dz + 2 * dx, top],
+    south: [u + dz, bottom, u + dz + dx, top],
+    east: [u, bottom, u + dz, top],
+    west: [u + dz + dx, bottom, u + 2 * dz + dx, top],
+  };
+}
+
+export function blockEntityBox(
+  from: Vec3,
+  to: Vec3,
+  texture: string,
+  size: TexSize,
+  b: BoxUV,
+): ModelElement {
+  const rects = blockEntityFaceRects(b);
+  const faces: Partial<Record<FaceDir, ModelFace>> = {};
+  for (const dir of Object.keys(rects) as FaceDir[]) {
+    faces[dir] = { texture, uv: scale(rects[dir], size) };
+  }
+  return el(from, to, faces);
+}
+
 export function entityBox(
   from: Vec3,
   to: Vec3,

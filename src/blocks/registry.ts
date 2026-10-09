@@ -4,6 +4,8 @@ import { PLAIN_CUBES } from './catalog';
 import type { Ctx, Family } from './context';
 import {
   CUBE_TABLE,
+  SNOWY_BLOCKS,
+  snowyAbove,
   copperGrateFamily,
   cubeAll,
   glazedTerracottaFamily,
@@ -31,7 +33,10 @@ import {
   bedFamily,
   bellFamily,
   chestFamily,
+  copperGolemStatueFamily,
+  driedGhastFamily,
   headFamily,
+  shelfFamily,
   signFamily,
 } from './families/furniture';
 import {
@@ -61,6 +66,7 @@ import {
   implicitlyWaterlogged,
   lichenFamily,
   lilyPadFamily,
+  paleHangingMossFamily,
   pitcherCropFamily,
   pointedDripstoneFamily,
   pottedFamily,
@@ -131,7 +137,10 @@ const cubeTableFamily: Family = {
   id: 'cube_table',
   match: (name) => Object.prototype.hasOwnProperty.call(CUBE_TABLE, name),
   build: (ctx) => CUBE_TABLE[ctx.name]!(ctx),
-  dynamic: (ctx) => ctx.name === 'grass_block' && ctx.props.snowy === undefined,
+  dynamic: (ctx) => SNOWY_BLOCKS.has(ctx.name) && ctx.props.snowy === undefined,
+  variantKey: (ctx) => (snowyAbove(ctx) ? 'snowy' : 'clear'),
+  extraTextures: (ctx) =>
+    SNOWY_BLOCKS.has(ctx.name) ? ['block/grass_block_snow', 'block/snow', 'block/dirt'] : [],
 };
 
 export const FAMILIES: Family[] = [
@@ -205,6 +214,10 @@ export const FAMILIES: Family[] = [
   signFamily,
   headFamily,
   bannerFamily,
+  shelfFamily,
+  copperGolemStatueFamily,
+  driedGhastFamily,
+  paleHangingMossFamily,
   coralFamily,
   logFamily,
   infestedFamily,
@@ -237,6 +250,27 @@ export function isKnownBlock(id: string): boolean {
   const vanilla = !id.includes(':') || id.startsWith('minecraft:');
   if (!vanilla) return false;
   return isAlwaysHidden(id) || familyFor(id) !== null || PLAIN_CUBES.has(stripNamespace(id));
+}
+
+export function neighborVariantKey(state: BlockState, neighbors: NeighborLookup): string {
+  const f = familyFor(state.name);
+  if (!f || !f.variantKey) return '';
+  return f.variantKey({
+    id: state.name,
+    name: stripNamespace(state.name),
+    props: state.properties,
+    neighbors,
+  });
+}
+
+export function extraTexturesFor(state: BlockState): string[] {
+  const f = familyFor(state.name);
+  if (!f || !f.extraTextures) return [];
+  return f.extraTextures({
+    id: state.name,
+    name: stripNamespace(state.name),
+    props: state.properties,
+  });
 }
 
 export function modelDependsOnNeighbors(state: BlockState): boolean {

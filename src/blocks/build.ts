@@ -1,5 +1,12 @@
 import type { RenderLayer } from '../core/types';
-import { FACE_DIRS, coversFullSide, faceArea, onBoundary, rotateElement } from './geometry';
+import {
+  FACE_DIRS,
+  coverageMask,
+  FULL_COVERAGE,
+  faceArea,
+  onBoundary,
+  rotateElement,
+} from './geometry';
 import type { BlockModel, ElementRotation, FaceDir, ModelElement, ModelFace, Vec3 } from './types';
 
 export type FaceInput = string | ModelFace;
@@ -57,18 +64,9 @@ export function all(input: FaceInput, extra?: Partial<ModelFace>): FaceMap {
   return { down: f, up: f, north: f, south: f, west: f, east: f };
 }
 
-export function sides(input: FaceInput, extra?: Partial<ModelFace>): FaceMap {
-  const f = face(input, extra);
-  return { north: f, south: f, west: f, east: f };
-}
-
 export function box(from: Vec3, to: Vec3, input: FaceInput | FaceMap): ModelElement {
   if (typeof input === 'string' || 'texture' in input) return el(from, to, all(input as FaceInput));
   return el(from, to, input);
-}
-
-export function columnFaces(side: FaceInput, end: FaceInput, bottom?: FaceInput): FaceMap {
-  return { ...sides(side), up: face(end), down: face(bottom ?? end) };
 }
 
 export function part(elements: ModelElement[], x = 0, y = 0, uvlock = false): Part {
@@ -124,6 +122,7 @@ export function finalize(spec: ModelSpec): BlockModel {
     }
   }
   const occludes: Partial<Record<FaceDir, boolean>> = {};
+  const coverage: Partial<Record<FaceDir, number>> = {};
   if ((layer === 'opaque' || spec.occluding) && !spec.noOcclusion) {
     const opaqueElements = elements.filter((e) =>
       FACE_DIRS.every((d) => {
@@ -132,7 +131,9 @@ export function finalize(spec: ModelSpec): BlockModel {
       }),
     );
     for (const dir of FACE_DIRS) {
-      if (coversFullSide(opaqueElements, dir)) occludes[dir] = true;
+      const mask = coverageMask(opaqueElements, dir);
+      if (mask) coverage[dir] = mask;
+      if (mask === FULL_COVERAGE) occludes[dir] = true;
     }
   }
   const model: BlockModel = {
@@ -140,6 +141,7 @@ export function finalize(spec: ModelSpec): BlockModel {
     layer,
     fullCube,
     occludes,
+    coverage,
     shadeOccluder: spec.shadeOccluder ?? fullCube,
     solid: spec.solid ?? (elements.length > 0 && (layer === 'opaque' || fullCube)),
   };

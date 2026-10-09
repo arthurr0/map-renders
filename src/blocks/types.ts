@@ -38,6 +38,7 @@ export interface BlockModel {
   layer: RenderLayer;
   fullCube: boolean;
   occludes: Partial<Record<Direction, boolean>>;
+  coverage?: Partial<Record<Direction, number>>;
   liquid?: 'water' | 'lava';
   liquidLevel?: number;
   emissive?: number;

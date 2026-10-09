@@ -2,9 +2,13 @@ import type { AtlasData, AtlasRegion, RenderLayer, TextureMode } from '../core/t
 import {
   DIR_VEC,
   FACE_DIRS,
+  FULL_COVERAGE,
   autoUV,
   cornerUVs,
   faceCorners,
+  faceCoverageRect,
+  onBoundary,
+  rectCells,
   srgbToLinear,
   tintColor,
   type BlockModel,
@@ -16,14 +20,10 @@ import {
 
 export const LAYER_INDEX: Record<RenderLayer, number> = { opaque: 0, cutout: 1, translucent: 2 };
 
-export const DIR_INDEX: Record<FaceDir, number> = {
-  down: 0,
-  up: 1,
-  north: 2,
-  south: 3,
-  west: 4,
-  east: 5,
-};
+export const DIR_INDEX = Object.fromEntries(FACE_DIRS.map((d, i) => [d, i])) as Record<
+  FaceDir,
+  number
+>;
 
 export interface BakedModel {
   count: number;
@@ -33,6 +33,7 @@ export interface BakedModel {
   color: Float32Array;
   emissive: Float32Array;
   cull: Int8Array;
+  cullMask: Uint16Array;
   layer: Uint8Array;
   aoDir: Int8Array;
   aoInside: Uint8Array;
@@ -81,15 +82,16 @@ function upgradeLayer(faceLayer: RenderLayer, region: AtlasRegion | undefined): 
 
 const DEG = Math.PI / 180;
 
-function rotatePoint(p: Vec3, el: ModelElement): Vec3 {
+function rotateAround(p: Vec3, el: ModelElement, scale: boolean): Vec3 {
   const r = el.rotation;
   if (!r || r.angle === 0) return p;
   const a = r.angle * DEG;
   const c = Math.cos(a);
   const s = Math.sin(a);
-  const x = p[0] - r.origin[0];
-  const y = p[1] - r.origin[1];
-  const z = p[2] - r.origin[2];
+  const o = scale ? r.origin : ([0, 0, 0] as Vec3);
+  const x = p[0] - o[0];
+  const y = p[1] - o[1];
+  const z = p[2] - o[2];
   let nx = x;
   let ny = y;
   let nz = z;
@@ -103,50 +105,18 @@ function rotatePoint(p: Vec3, el: ModelElement): Vec3 {
     nx = x * c - y * s;
     ny = x * s + y * c;
   }
-  if (r.rescale && Math.abs(c) > 1e-6) {
+  if (scale && r.rescale && Math.abs(c) > 1e-6) {
     const k = 1 / Math.abs(c);
     if (r.axis !== 'x') nx *= k;
     if (r.axis !== 'y') ny *= k;
     if (r.axis !== 'z') nz *= k;
   }
-  return [nx + r.origin[0], ny + r.origin[1], nz + r.origin[2]];
-}
-
-function rotateNormal(n: Vec3, el: ModelElement): Vec3 {
-  const r = el.rotation;
-  if (!r || r.angle === 0) return n;
-  const a = r.angle * DEG;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  const [x, y, z] = n;
-  if (r.axis === 'x') return [x, y * c - z * s, y * s + z * c];
-  if (r.axis === 'y') return [x * c + z * s, y, -x * s + z * c];
-  return [x * c - y * s, x * s + y * c, z];
-}
-
-function isBoundary(el: ModelElement, dir: FaceDir): boolean {
-  switch (dir) {
-    case 'down':
-      return el.from[1] <= 0;
-    case 'up':
-      return el.to[1] >= 16;
-    case 'north':
-      return el.from[2] <= 0;
-    case 'south':
-      return el.to[2] >= 16;
-    case 'west':
-      return el.from[0] <= 0;
-    case 'east':
-      return el.to[0] >= 16;
-  }
+  return [nx + o[0], ny + o[1], nz + o[2]];
 }
 
 function coversFace(el: ModelElement, dir: FaceDir): boolean {
-  const [x0, y0, z0] = el.from;
-  const [x1, y1, z1] = el.to;
-  if (dir === 'up' || dir === 'down') return x0 <= 0 && z0 <= 0 && x1 >= 16 && z1 >= 16;
-  if (dir === 'north' || dir === 'south') return x0 <= 0 && y0 <= 0 && x1 >= 16 && y1 >= 16;
-  return z0 <= 0 && y0 <= 0 && z1 >= 16 && y1 >= 16;
+  const [a0, b0, a1, b1] = faceCoverageRect(el.from, el.to, dir);
+  return a0 <= 0 && b0 <= 0 && a1 >= 16 && b1 >= 16;
 }
 
 const clamp16 = (v: number) => (v < 0 ? 0 : v > 16 ? 16 : v);
@@ -162,6 +132,7 @@ export function bakeModel(model: BlockModel, lookup: TextureLookup): BakedModel 
     color: new Float32Array(count * 3),
     emissive: new Float32Array(count),
     cull: new Int8Array(count),
+    cullMask: new Uint16Array(count),
     layer: new Uint8Array(count),
     aoDir: new Int8Array(count),
     aoInside: new Uint8Array(count),
@@ -181,7 +152,7 @@ export function bakeModel(model: BlockModel, lookup: TextureLookup): BakedModel 
       const corners = faceCorners(el.from, el.to, dir);
       const uvs = cornerUVs(face.uv ?? autoUV(el.from, el.to, dir), face.rotation ?? 0);
       for (let i = 0; i < 4; i++) {
-        const p = rotatePoint(corners[i]!, el);
+        const p = rotateAround(corners[i]!, el, true);
         out.pos[q * 12 + i * 3] = p[0] / 16;
         out.pos[q * 12 + i * 3 + 1] = p[1] / 16;
         out.pos[q * 12 + i * 3 + 2] = p[2] / 16;
@@ -191,7 +162,7 @@ export function bakeModel(model: BlockModel, lookup: TextureLookup): BakedModel 
           out.uv[q * 8 + i * 2 + 1] = region.v0 + (clamp16(v) / 16) * (region.v1 - region.v0);
         }
       }
-      const n = rotateNormal(DIR_VEC[dir], el);
+      const n = rotateAround(DIR_VEC[dir], el, false);
       out.normal[q * 3] = n[0];
       out.normal[q * 3 + 1] = n[1];
       out.normal[q * 3 + 2] = n[2];
@@ -201,10 +172,15 @@ export function bakeModel(model: BlockModel, lookup: TextureLookup): BakedModel 
       out.color[q * 3 + 1] = base[1] * tint[1];
       out.color[q * 3 + 2] = base[2] * tint[2];
       out.emissive[q] = face.emissive ?? model.emissive ?? 0;
-      out.cull[q] = face.cullface && !rotated ? DIR_INDEX[face.cullface] : -1;
+      const cull = face.cullface && !rotated ? DIR_INDEX[face.cullface] : -1;
+      out.cull[q] = cull;
+      if (cull >= 0) {
+        const [a0, b0, a1, b1] = faceCoverageRect(el.from, el.to, dir);
+        out.cullMask[q] = face.cullface === dir ? rectCells(a0, b0, a1, b1) : FULL_COVERAGE;
+      }
       out.layer[q] = LAYER_INDEX[upgradeLayer(faceLayer, region)];
       out.aoDir[q] = rotated ? -1 : DIR_INDEX[dir];
-      const boundary = isBoundary(el, dir);
+      const boundary = onBoundary(el.from, el.to, dir);
       out.aoInside[q] = boundary ? 0 : 1;
       out.fullFace[q] = !rotated && boundary && coversFace(el, dir) ? 1 : 0;
       q++;

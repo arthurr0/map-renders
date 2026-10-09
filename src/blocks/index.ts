@@ -1,6 +1,12 @@
 import type { BlockState } from '../core/types';
 import { stateKey } from '../core/volume';
-import { isAlwaysHidden, modelDependsOnNeighbors, resolveModel } from './registry';
+import {
+  extraTexturesFor,
+  isAlwaysHidden,
+  modelDependsOnNeighbors,
+  neighborVariantKey,
+  resolveModel,
+} from './registry';
 import type { BlockModel, NeighborLookup } from './types';
 
 export type {
@@ -13,16 +19,34 @@ export type {
   TintKind,
   Vec3,
 } from './types';
-export { isAlwaysHidden, isKnownBlock, modelDependsOnNeighbors } from './registry';
+export {
+  isAlwaysHidden,
+  isKnownBlock,
+  modelDependsOnNeighbors,
+  neighborVariantKey,
+} from './registry';
 export { TINT_HEX, TINT_RGB, hexToRgb, redstoneColor, srgbToLinear, tintColor } from './tints';
-export { DIR_VEC, FACE_DIRS, OPPOSITE, autoUV, cornerUVs, faceCorners } from './geometry';
+export {
+  DIR_VEC,
+  FACE_DIRS,
+  FULL_COVERAGE,
+  OPPOSITE,
+  autoUV,
+  cornerUVs,
+  faceCorners,
+  faceCoverageRect,
+  onBoundary,
+  rectCells,
+} from './geometry';
 export { PROBE_PROPS, knownBlockNames } from './catalog';
 
 const staticCache = new Map<string, BlockModel | null>();
 
 export function resolveBlockModel(state: BlockState, neighbors: NeighborLookup): BlockModel | null {
-  if (modelDependsOnNeighbors(state)) return resolveModel(state, neighbors);
-  const key = stateKey(state);
+  const base = stateKey(state);
+  const key = modelDependsOnNeighbors(state)
+    ? `${base}|${neighborVariantKey(state, neighbors)}`
+    : base;
   const cached = staticCache.get(key);
   if (cached !== undefined) return cached;
   const model = resolveModel(state, neighbors);
@@ -52,6 +76,7 @@ export function requiredTextures(palette: BlockState[]): string[] {
     if (isAlwaysHidden(state.name)) continue;
     const model = resolveBlockModel(state, air);
     if (model) modelTextures(model, out);
+    for (const t of extraTexturesFor(state)) out.add(t);
   }
   return [...out].sort();
 }

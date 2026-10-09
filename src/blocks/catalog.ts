@@ -345,6 +345,20 @@ const NAMED_BLOCKS = [
   'mushroom_stem',
   'shulker_box',
   ...withCopper('copper_bulb'),
+  ...withCopper('copper_chain'),
+  ...withCopper('copper_lantern'),
+  ...withCopper('copper_bars'),
+  ...withCopper('copper_golem_statue'),
+  ...withCopper('lightning_rod').map((n) => `waxed_${n}`),
+  'exposed_lightning_rod',
+  'weathered_lightning_rod',
+  'oxidized_lightning_rod',
+  'copper_torch',
+  'copper_wall_torch',
+  'iron_chain',
+  'dried_ghast',
+  'pale_hanging_moss',
+  ...WOODS.map((w) => `${w}_shelf`),
   ...withCopper('copper_grate'),
   ...withCopper('copper_door'),
   ...withCopper('copper_trapdoor'),
@@ -606,6 +620,7 @@ export function knownBlockNames(): string[] {
       /copper|cut_copper/.test(n) &&
       !n.startsWith('waxed_') &&
       !/_ore$/.test(n) &&
+      !n.endsWith('torch') &&
       n !== 'raw_copper_block'
     ) {
       names.add(`waxed_${n}`);
@@ -652,6 +667,7 @@ export const PROBE_PROPS: Record<string, string>[] = [
   { mode: 'corner' },
   { mode: 'data' },
   { tilt: 'full' },
+  { tip: 'false' },
   { inverted: 'false', power: '0' },
   ...['0', '1', '2', '3', '4', '5', '6', '7', '8'].flatMap((v): Record<string, string>[] => [
     { age: v },
@@ -663,6 +679,7 @@ export const PROBE_PROPS: Record<string, string>[] = [
     { candles: v },
     { pickles: v },
     { eggs: v },
+    { hydration: v },
   ]),
   ...['tip', 'tip_merge', 'frustum', 'middle', 'base'].flatMap((t): Record<string, string>[] => [
     { thickness: t, vertical_direction: 'up' },
