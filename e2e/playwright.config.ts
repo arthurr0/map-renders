@@ -11,12 +11,15 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   fullyParallel: false,
-  reporter: 'list',
+  reporter: process.env.CI
+    ? [['list'], ['html', { open: 'never', outputFolder: '../playwright-report' }]]
+    : 'list',
   use: {
     baseURL: `http://localhost:${port}`,
     actionTimeout: 30_000,
     navigationTimeout: 60_000,
     acceptDownloads: true,
+    trace: 'retain-on-failure',
   },
   webServer: {
     command: `pnpm exec vite preview --port ${port} --strictPort`,
