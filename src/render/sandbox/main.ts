@@ -27,6 +27,8 @@ function backgroundFrom(kind: string): Background {
         timeOfDay: Number(params.get('time') ?? 15),
         turbidity: Number(params.get('turbidity') ?? 4),
       };
+    case 'night-sky':
+      return { type: 'night-sky', twilight: Number(params.get('twilight') ?? 0.2) };
     case 'hdri':
       return {
         type: 'hdri',
@@ -127,7 +129,7 @@ function addSelect(label: string, values: string[], current: string, on: (v: str
 
 addSelect(
   'Background',
-  ['gradient', 'solid', 'sky', 'hdri', 'transparent'],
+  ['gradient', 'solid', 'sky', 'night-sky', 'hdri', 'transparent'],
   settings.background.type,
   (v) => update({ background: backgroundFrom(v) }),
 );

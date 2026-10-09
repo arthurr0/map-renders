@@ -76,7 +76,15 @@ export class SceneLighting {
     const ambientColor = new Color(s.ambient.color);
     let ambientIntensity = s.ambient.intensity;
 
-    if (background.kind === 'sky' && override) {
+    const moon = background.moonLight;
+    if (background.kind === 'sky' && moon) {
+      const look = sunLookForElevation(-12);
+      ambientColor.lerp(srgb(look.ambientColor), 0.7);
+      ambientIntensity *= look.ambientIntensity * 1.4;
+      dir = sunDirection(moon.azimuth, Math.max(10, moon.elevation));
+      sunColor.multiply(MOON_TINT).multiply(new Color(moon.color));
+      sunIntensity *= 0.4;
+    } else if (background.kind === 'sky' && override) {
       const look = sunLookForElevation(elevation);
       ambientColor.lerp(srgb(look.ambientColor), 0.7);
       ambientIntensity *= look.ambientIntensity;

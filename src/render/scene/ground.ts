@@ -16,9 +16,12 @@ import {
   type Material,
   type Texture,
 } from 'three';
-import type { GroundType } from '../../core/types';
+import type { GroundType, WaterSettings } from '../../core/types';
 import { GROUND_TERMS, patchBlockShader, type SharedUniforms } from './materials';
 import type { Bounds } from '../math/vec';
+import { WATER_BASE_OFFSET } from '../math/water';
+import { WaterSurface } from './water';
+import { patchWaterShader } from './waterShader';
 
 const GROUND_EXTENT = 12000;
 const GRID_BASE = '#c3c8d0';
@@ -92,6 +95,9 @@ const SHADOW_CATCHER_LINE = 'gl_FragColor = vec4( color, opacity * ( 1.0 - getSh
 export class Ground {
   readonly group = new Group();
   private type: GroundType = 'none';
+  private fx = false;
+  private level = 0;
+  private readonly surface: WaterSurface | null;
   private boundsKey = '';
   private mesh: Mesh | null = null;
   private material: Material | null = null;
@@ -111,8 +117,19 @@ export class Ground {
   constructor(
     private readonly shared: SharedUniforms,
     private readonly anisotropy: number,
+    waterFx = false,
   ) {
     this.group.name = 'ground';
+    this.surface = waterFx ? new WaterSurface() : null;
+  }
+
+  get surfaceY(): number | undefined {
+    if (this.type !== 'water' || !this.fx || !this.surface) return undefined;
+    return this.surface.surfaceY;
+  }
+
+  invalidateWater(): void {
+    this.surface?.invalidateDepth();
   }
 
   get extent(): number {
@@ -132,8 +149,13 @@ export class Ground {
     }
   }
 
-  update(type: GroundType, bounds: Bounds | null): void {
+  update(type: GroundType, bounds: Bounds | null, water?: WaterSettings): void {
     const b: Bounds = bounds ?? { min: [-8, 0, -8], max: [8, 8, 8] };
+    const fx = type === 'water' && !!water?.enabled && !!this.surface;
+    const level = fx && water ? water.level : 0;
+    if (fx && water) this.surface?.configure(water, b);
+    const levelChanged = level !== this.level;
+    this.level = level;
     const key = `${b.min.join(',')}|${b.max.join(',')}`;
     if (key !== this.boundsKey) {
       this.boundsKey = key;
@@ -149,8 +171,10 @@ export class Ground {
       this.uniforms.uShadowFadeOuter!.value = ext.shadowFadeOuter;
       if (this.mesh) this.place(this.mesh, b);
     }
-    if (type === this.type) return;
+    if (levelChanged && this.mesh) this.place(this.mesh, b);
+    if (type === this.type && fx === this.fx) return;
     this.type = type;
+    this.fx = fx;
     this.clear();
     if (type === 'none') return;
 
@@ -210,6 +234,33 @@ export class Ground {
         break;
       }
       case 'water': {
+        if (fx && this.surface) {
+          const surface = this.surface;
+          const m = new MeshStandardMaterial({
+            color: new Color('#ffffff'),
+            roughness: Math.max(0.05, water?.roughness ?? 0.1),
+            metalness: 0,
+            transparent: true,
+            depthWrite: false,
+            envMap: this.envMap,
+            envMapIntensity: 1,
+          });
+          m.onBeforeCompile = (shader) => {
+            patchBlockShader(
+              shader,
+              this.shared,
+              { ground: true },
+              {
+                ...this.uniforms,
+                ...surface.uniforms,
+              },
+            );
+            patchWaterShader(shader);
+          };
+          m.customProgramCacheKey = () => 'ground-water-fx';
+          material = m;
+          break;
+        }
         const m = new MeshStandardMaterial({
           color: new Color('#3c8fa8'),
           roughness: 0.1,
@@ -235,6 +286,11 @@ export class Ground {
     mesh.renderOrder = type === 'water' ? 1 : -1;
     mesh.frustumCulled = false;
     if (type === 'shadow-catcher') mesh.userData.excludeFromAO = true;
+    if (fx && this.surface) {
+      const surface = this.surface;
+      mesh.onBeforeRender = (renderer, scene, camera, _geometry, used) =>
+        surface.beforeRender(renderer, scene, camera, mesh, used, material);
+    }
     this.mesh = mesh;
     this.material = material;
     this.group.add(mesh);
@@ -253,7 +309,11 @@ export class Ground {
   private place(mesh: Mesh, b: Bounds): void {
     const cx = (b.min[0] + b.max[0]) / 2;
     const cz = (b.min[2] + b.max[2]) / 2;
-    mesh.position.set(cx, b.min[1] - (this.type === 'water' ? 0.12 : 0.002), cz);
+    mesh.position.set(
+      cx,
+      b.min[1] - (this.type === 'water' ? WATER_BASE_OFFSET : 0.002) + (this.fx ? this.level : 0),
+      cz,
+    );
   }
 
   private clear(): void {
@@ -270,5 +330,6 @@ export class Ground {
 
   dispose(): void {
     this.clear();
+    this.surface?.dispose();
   }
 }

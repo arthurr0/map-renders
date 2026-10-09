@@ -10,6 +10,7 @@ const TYPES: { value: BackgroundType; label: string }[] = [
   { value: 'solid', label: 'Solid color' },
   { value: 'gradient', label: 'Gradient' },
   { value: 'sky', label: 'Sky' },
+  { value: 'night-sky', label: 'Night sky' },
   { value: 'hdri', label: 'HDRI' },
   { value: 'transparent', label: 'Transparent' },
 ];
@@ -37,6 +38,7 @@ function formatHour(hour: number): string {
 export function BackgroundSection() {
   const background = useAppStore((state) => state.settings.background);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const sky = useAppStore((state) => state.settings.sky);
   const hdriList = useAppStore((state) => state.hdriList);
   const setHdriList = useAppStore((state) => state.setHdriList);
 
@@ -79,6 +81,16 @@ export function BackgroundSection() {
         break;
       case 'sky':
         set({ type, timeOfDay: 12, turbidity: 4 });
+        break;
+      case 'night-sky':
+        updateSettings({
+          background: { type, twilight: 0.2 },
+          sky: {
+            ...sky,
+            stars: { ...sky.stars, enabled: true },
+            moon: { ...sky.moon, enabled: true },
+          },
+        });
         break;
       case 'hdri':
         set({ type, id: hdriList[0]?.id ?? '', blur: 0, rotation: 0 });
@@ -163,6 +175,15 @@ export function BackgroundSection() {
             onChange={(turbidity) => set({ ...background, turbidity })}
           />
         </>
+      )}
+      {background.type === 'night-sky' && (
+        <Slider
+          label="Twilight"
+          value={background.twilight}
+          min={0}
+          max={1}
+          onChange={(twilight) => set({ ...background, twilight })}
+        />
       )}
       {background.type === 'hdri' && (
         <>

@@ -89,15 +89,45 @@ export type Background =
   | { type: 'solid'; color: string }
   | { type: 'gradient'; top: string; bottom: string }
   | { type: 'sky'; timeOfDay: number; turbidity: number }
+  | { type: 'night-sky'; twilight: number }
   | { type: 'hdri'; id: string; blur: number; rotation: number }
   | { type: 'transparent' };
 
 export type GroundType = 'none' | 'shadow-catcher' | 'grass' | 'grid' | 'water';
 
+export interface WaterSettings {
+  enabled: boolean;
+  colorShallow: string;
+  colorDeep: string;
+  reflectivity: number;
+  waveHeight: number;
+  waveScale: number;
+  wavePhase: number;
+  roughness: number;
+  sunGlitter: number;
+  shoreGlow: number;
+  level: number;
+}
+
+export interface SkySettings {
+  stars: { enabled: boolean; density: number; brightness: number };
+  moon: {
+    enabled: boolean;
+    azimuth: number;
+    elevation: number;
+    size: number;
+    glow: number;
+    color: string;
+  };
+  horizonGlow: { enabled: boolean; intensity: number; height: number; color: string };
+}
+
 export interface RenderSettings {
   textureMode: TextureMode;
   background: Background;
   ground: GroundType;
+  water: WaterSettings;
+  sky: SkySettings;
   sun: { azimuth: number; elevation: number; intensity: number; color: string };
   ambient: { intensity: number; color: string };
   useBackgroundLighting: boolean;
