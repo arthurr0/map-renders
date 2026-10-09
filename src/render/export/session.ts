@@ -88,6 +88,12 @@ export class ExportSession {
       bloomResolutionScale: 1,
       clipBox: host.clipBox,
       fx: fxConfigFrom(s, host.focusPoint ?? null),
+      clouds: {
+        settings: s.clouds,
+        bounds: host.bounds,
+        ground: s.ground,
+        exportSupersample: this.supersample,
+      },
     });
 
     const aspect = this.width / this.height;

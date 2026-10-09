@@ -2,6 +2,7 @@ import { BackgroundSection } from '../sections/BackgroundSection';
 import { BlocksSection } from '../sections/BlocksSection';
 import { GradingSection } from '../sections/GradingSection';
 import { PostFxSection } from '../sections/PostFxSection';
+import { CloudsSection } from '../sections/CloudsSection';
 import {
   CameraSection,
   EffectsSection,
@@ -43,6 +44,7 @@ export function Sidebar() {
       <EffectsSection />
       <PostFxSection />
       <GradingSection />
+      <CloudsSection />
       <CameraSection />
       <BlocksSection />
     </aside>

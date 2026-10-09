@@ -522,6 +522,7 @@ export class SceneRenderer {
       bloomResolutionScale: 1,
       clipBox: this.clipBox,
       fx: fxConfigFrom(s, this.boundsCenter()),
+      clouds: { settings: s.clouds, bounds: this.bounds, ground: s.ground },
     });
     this.rig.setScene(this.bounds, this.ground.extent);
     this.requestRender();

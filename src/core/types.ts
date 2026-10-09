@@ -139,6 +139,7 @@ export interface GodRaySettings {
   decay: number;
   samples: number;
   length: number;
+}
 
 export interface WaterSettings {
   enabled: boolean;
@@ -167,6 +168,22 @@ export interface SkySettings {
   horizonGlow: { enabled: boolean; intensity: number; height: number; color: string };
 }
 
+export type CloudQuality = 'low' | 'medium' | 'high';
+
+export interface CloudSettings {
+  enabled: boolean;
+  coverage: number;
+  density: number;
+  height: number;
+  thickness: number;
+  scale: number;
+  windOffset: number;
+  sunInfluence: number;
+  color: string;
+  shadowColor: string;
+  quality: CloudQuality;
+}
+
 export interface RenderSettings {
   textureMode: TextureMode;
   background: Background;
@@ -188,6 +205,7 @@ export interface RenderSettings {
   toneMapping: 'aces' | 'agx' | 'neutral' | 'none';
   exposure: number;
   ambientOcclusionVertex: boolean;
+  clouds: CloudSettings;
 }
 
 export interface ExportOptions {

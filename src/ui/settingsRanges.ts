@@ -59,6 +59,13 @@ export const RANGES = {
   moonGlow: { min: 0, max: 3 },
   horizonGlowIntensity: { min: 0, max: 2 },
   horizonGlowHeight: { min: 0.05, max: 1 },
+  cloudCoverage: { min: 0, max: 1 },
+  cloudDensity: { min: 0, max: 3 },
+  cloudHeight: { min: -2, max: 2 },
+  cloudThickness: { min: 0.05, max: 2 },
+  cloudScale: { min: 0.2, max: 4 },
+  cloudWindOffset: { min: 0, max: 10 },
+  cloudSunInfluence: { min: 0, max: 3 },
 } as const satisfies Record<string, Range>;
 
 export function clampToRange(value: number, range: Range): number {
