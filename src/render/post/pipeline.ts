@@ -47,7 +47,6 @@ export class PostPipeline {
   private fxaa: FXAAPass | null = null;
   private width: number;
   private height: number;
-  private config: PipelineConfig | null = null;
   private passKey = '';
   private tileView: TileView | null = null;
   private externalBloom: { texture: Texture } | null = null;
@@ -77,7 +76,6 @@ export class PostPipeline {
   }
 
   configure(config: PipelineConfig): void {
-    this.config = config;
     this.scenePass.setSamples(config.msaaSamples, this.width, this.height);
 
     if (config.ssao.enabled) {
@@ -87,11 +85,11 @@ export class PostPipeline {
       }
       this.gtao.blendIntensity = Math.max(0, config.ssao.intensity);
       this.gtao.updateGtaoMaterial({
-        radius: Math.max(0.05, config.ssao.radius),
-        distanceExponent: 1.5,
-        thickness: 1.5,
+        radius: Math.max(0.05, config.ssao.radius * 1.6),
+        distanceExponent: 1.2,
+        thickness: 1.2,
         distanceFallOff: 1,
-        scale: 1,
+        scale: 1.35,
         samples: 16,
       });
       this.gtao.updatePdMaterial({
@@ -194,10 +192,6 @@ export class PostPipeline {
     this.composer.renderToScreen = toScreen;
     this.composer.render(0);
     return this.composer.readBuffer.texture;
-  }
-
-  get currentConfig(): PipelineConfig | null {
-    return this.config;
   }
 
   dispose(): void {

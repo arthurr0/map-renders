@@ -18,16 +18,35 @@ export function mimeFor(format: ExportOptions['format']): string {
   return format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
 }
 
-export function flattenOnto(image: ImageData, r: number, g: number, b: number): void {
+export function flattenOnto(
+  image: ImageData,
+  top: [number, number, number],
+  bottom: [number, number, number] = top,
+): void {
   const d = image.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const a = d[i + 3]! / 255;
-    if (a >= 1) continue;
-    d[i] = Math.round(d[i]! * a + r * (1 - a));
-    d[i + 1] = Math.round(d[i + 1]! * a + g * (1 - a));
-    d[i + 2] = Math.round(d[i + 2]! * a + b * (1 - a));
-    d[i + 3] = 255;
+  const w = image.width;
+  const h = image.height;
+  for (let y = 0; y < h; y++) {
+    const t = h > 1 ? y / (h - 1) : 0;
+    const r = top[0] + (bottom[0] - top[0]) * t;
+    const g = top[1] + (bottom[1] - top[1]) * t;
+    const b = top[2] + (bottom[2] - top[2]) * t;
+    for (let x = 0; x < w; x++) {
+      const i = (x + y * w) * 4;
+      const a = d[i + 3]! / 255;
+      if (a >= 1) continue;
+      d[i] = Math.round(d[i]! * a + r * (1 - a));
+      d[i + 1] = Math.round(d[i + 1]! * a + g * (1 - a));
+      d[i + 2] = Math.round(d[i + 2]! * a + b * (1 - a));
+      d[i + 3] = 255;
+    }
   }
+}
+
+export function gifFrameDelay(fps: number, index: number): number {
+  const start = Math.round((index * 100) / fps);
+  const end = Math.round(((index + 1) * 100) / fps);
+  return Math.max(1, end - start) * 10;
 }
 
 export async function imageDataToBlob(
@@ -198,9 +217,9 @@ export function createMediaRecorderSink(width: number, height: number, fps: numb
 
 export function createGifSink(fps: number, transparent: boolean): FrameSink {
   const gif = GIFEncoder();
-  const delay = Math.round(1000 / fps);
   return {
-    async add(image) {
+    async add(image, frameIndex) {
+      const delay = gifFrameDelay(fps, frameIndex);
       const data = image.data;
       if (transparent) {
         const palette = quantize(data, 256, { format: 'rgba4444', oneBitAlpha: true });

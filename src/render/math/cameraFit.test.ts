@@ -1,13 +1,29 @@
 import { describe, expect, it } from 'vitest';
+import type { CameraState } from '../../core/types';
 import {
   fitCameraToBounds,
   fitPreset,
   orthoVisibleHeight,
   presetDirection,
-  projectToScreen,
+  viewBasis,
   type CameraPreset,
 } from './cameraFit';
-import { boxCorners, length, normalize, sub, type Bounds } from './vec';
+import { DEG, boxCorners, dot, length, normalize, sub, type Bounds, type Vec3 } from './vec';
+
+function projectToScreen(state: CameraState, aspect: number, point: Vec3): [number, number] {
+  const z = normalize(sub(state.position, state.target));
+  const { right, up } = viewBasis(z);
+  const rel = sub(point, state.position);
+  const x = dot(rel, right);
+  const y = dot(rel, up);
+  const depth = -dot(rel, z);
+  const tanV = Math.tan((state.fov * DEG) / 2);
+  if (state.projection === 'perspective') {
+    return [x / (depth * tanV * aspect), y / (depth * tanV)];
+  }
+  const h = orthoVisibleHeight(state) / 2;
+  return [x / (h * aspect), y / h];
+}
 
 const bounds: Bounds = { min: [-5, 0, -8], max: [15, 24, 12] };
 const presets: CameraPreset[] = ['iso', 'front', 'side', 'top', 'three-quarter'];

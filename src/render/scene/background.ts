@@ -70,19 +70,35 @@ export interface BackgroundOptions {
   skyClouds: number;
 }
 
-const SKY_INTENSITY = 0.55;
-const SKY_ENV_SCALE = 0.25;
+const SKY_INTENSITY = 0.38;
+const SKY_ENV_SCALE = 0.36;
+const HORIZON_LIFT = 0.55;
+const HORIZON_BASE = 0.18;
+const SKY_SATURATION = 1.45;
+const SKY_ENV_INTERVAL_MS = 100;
 
 function createSky(): Sky {
   const sky = new Sky();
   const material = sky.material as ShaderMaterial;
   material.uniforms.skyIntensity = { value: SKY_INTENSITY };
   material.uniforms.nightAmount = { value: 0 };
-  material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\n${material.fragmentShader.replace(
-    'gl_FragColor = vec4( texColor, 1.0 );',
-    `vec3 nightSky = mix( vec3( 0.012, 0.02, 0.05 ), vec3( 0.002, 0.004, 0.014 ), smoothstep( 0.0, 0.6, direction.y ) );
+  material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\n${material.fragmentShader
+    .replace(
+      'vec3 direction = normalize( vWorldPosition - cameraPosition );',
+      `vec3 rawDirection = normalize( vWorldPosition - cameraPosition );
+      float liftedY = rawDirection.y >= 0.0
+        ? ${HORIZON_BASE.toFixed(3)} + ${(1 - HORIZON_BASE).toFixed(3)} * pow( rawDirection.y, ${HORIZON_LIFT.toFixed(2)} )
+        : ${HORIZON_BASE.toFixed(3)} * ( 1.0 - 0.5 * smoothstep( 0.0, 0.3, -rawDirection.y ) );
+      float horizontal = max( length( rawDirection.xz ), 1e-5 );
+      vec3 direction = vec3( rawDirection.xz / horizontal * sqrt( max( 1.0 - liftedY * liftedY, 0.0 ) ), liftedY ).xzy;`,
+    )
+    .replace(
+      'gl_FragColor = vec4( texColor, 1.0 );',
+      `vec3 nightSky = mix( vec3( 0.012, 0.02, 0.05 ), vec3( 0.002, 0.004, 0.014 ), smoothstep( 0.0, 0.6, direction.y ) );
+      float skyLuma = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) );
+      texColor = max( mix( vec3( skyLuma ), texColor, ${SKY_SATURATION.toFixed(2)} ), vec3( 0.0 ) );
       gl_FragColor = vec4( texColor * skyIntensity + nightSky * nightAmount, 1.0 );`,
-  )}`;
+    )}`;
   material.needsUpdate = true;
   sky.scale.setScalar(10);
   sky.frustumCulled = false;
@@ -130,6 +146,10 @@ export class BackgroundLayer {
   private reflectionTarget: WebGLRenderTarget | null = null;
   private reflectionKey = '';
   private requestedHdri: string | null = null;
+  private lastHdriId: string | null = null;
+  private readonly failedHdri = new Set<string>();
+  private lastSkyEnvTime = -Infinity;
+  private skyEnvTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
   kind: 'none' | 'sky' | 'hdri' = 'none';
@@ -138,7 +158,6 @@ export class BackgroundLayer {
   reflection: Texture | null = null;
   rotation = 0;
   sunOverride: SunAngles | null = null;
-  hdrIntensity = 1;
   environmentScale = 1;
 
   constructor(
@@ -196,42 +215,43 @@ export class BackgroundLayer {
         const dir = sunDirection(sun.azimuth, sun.elevation);
         const u = (this.sky.material as ShaderMaterial).uniforms;
         u.sunPosition!.value = new Vector3(dir[0], dir[1], dir[2]);
-        u.turbidity!.value = bg.turbidity;
-        u.rayleigh!.value = sun.elevation < 12 ? 2.4 : 1.6;
-        u.mieCoefficient!.value = 0.005;
-        u.mieDirectionalG!.value = 0.78;
+        u.turbidity!.value = 1.2 + Math.max(0, bg.turbidity) * 0.45;
+        u.rayleigh!.value = sun.elevation < 12 ? 2.6 : 2.4;
+        u.mieCoefficient!.value = sun.elevation < 12 ? 0.004 : 0.0022;
+        u.mieDirectionalG!.value = 0.82;
         u.cloudCoverage!.value = options.skyClouds;
         u.cloudDensity!.value = 0.45;
         u.showSunDisc!.value = 1;
         u.nightAmount!.value = 1 - Math.min(1, Math.max(0, (sun.elevation + 8) / 10));
         this.sky.visible = true;
         const key = `${dir.map((v) => v.toFixed(4)).join(',')}:${bg.turbidity}:${options.skyClouds}`;
-        if (key !== this.skyKey || !this.skyEnv) {
-          this.skyKey = key;
-          const old = this.skyEnv;
-          this.skyEnv = this.pmrem.fromScene(this.skyEnvScene, 0, 0.1, 100);
-          old?.dispose();
-        }
-        this.environment = this.skyEnv.texture;
+        this.updateSkyEnv(key);
+        this.environment = this.skyEnv?.texture ?? null;
         this.environmentScale = SKY_ENV_SCALE;
-        this.reflection = this.skyEnv.texture;
+        this.reflection = this.skyEnv?.texture ?? null;
         break;
       }
       case 'hdri': {
         this.kind = 'hdri';
         this.rotation = bg.rotation * DEG;
         this.requestedHdri = bg.id;
+        if (bg.id !== this.lastHdriId) {
+          this.lastHdriId = bg.id;
+          this.failedHdri.delete(bg.id);
+        }
         const asset = this.hdriAssets.get(bg.id);
         if (asset) {
           this.useHdri(asset, bg, options);
         } else {
           this.environment = null;
-          void this.loadHdri(bg.id).then(
-            () => {
-              if (!this.disposed && this.requestedHdri === bg.id) this.onChange();
-            },
-            (e: unknown) => console.error(e),
-          );
+          if (!this.failedHdri.has(bg.id)) {
+            void this.loadHdri(bg.id).then(
+              () => {
+                if (!this.disposed && this.requestedHdri === bg.id) this.onChange();
+              },
+              (e: unknown) => console.error(e),
+            );
+          }
         }
         break;
       }
@@ -246,13 +266,12 @@ export class BackgroundLayer {
     this.hdrScene.background = asset.texture;
     this.hdrScene.backgroundBlurriness = Math.min(1, Math.max(0, bg.blur));
     this.hdrScene.backgroundRotation.set(0, this.rotation, 0);
-    this.hdrScene.backgroundIntensity = this.hdrIntensity;
     this.environment = asset.pmrem.texture;
     this.environmentScale = 1;
     this.reflection = asset.pmrem.texture;
     if (options.sunFollowsBackground) {
       this.sunOverride = directionToSunAngles(rotateY(asset.sun, this.rotation));
-      this.sunOverride.elevation = Math.max(4, this.sunOverride.elevation);
+      this.sunOverride.elevation = Math.max(8, this.sunOverride.elevation);
     }
   }
 
@@ -267,8 +286,24 @@ export class BackgroundLayer {
     };
   }
 
-  isLoading(): boolean {
-    return this.kind === 'hdri' && !this.hdrScene.background;
+  private updateSkyEnv(key: string): void {
+    if (key === this.skyKey && this.skyEnv) return;
+    const now = performance.now();
+    const wait = this.lastSkyEnvTime + SKY_ENV_INTERVAL_MS - now;
+    if (this.skyEnv && wait > 0) {
+      if (!this.skyEnvTimer) {
+        this.skyEnvTimer = setTimeout(() => {
+          this.skyEnvTimer = null;
+          if (!this.disposed) this.onChange();
+        }, wait);
+      }
+      return;
+    }
+    this.skyKey = key;
+    this.lastSkyEnvTime = now;
+    const old = this.skyEnv;
+    this.skyEnv = this.pmrem.fromScene(this.skyEnvScene, 0, 0.1, 100);
+    old?.dispose();
   }
 
   private loadHdri(id: string): Promise<HdriAsset> {
@@ -292,15 +327,23 @@ export class BackgroundLayer {
         }
         return asset;
       });
-      p.catch(() => this.hdriCache.delete(id));
+      p.catch(() => {
+        this.hdriCache.delete(id);
+        this.failedHdri.add(id);
+      });
       this.hdriCache.set(id, p);
     }
     return p;
   }
 
   async whenReady(): Promise<void> {
-    if (this.kind === 'hdri' && this.requestedHdri && !this.hdriAssets.has(this.requestedHdri)) {
-      await this.loadHdri(this.requestedHdri);
+    const id = this.requestedHdri;
+    if (this.kind === 'hdri' && id && !this.hdriAssets.has(id) && !this.failedHdri.has(id)) {
+      try {
+        await this.loadHdri(id);
+      } catch {
+        return;
+      }
     }
   }
 
@@ -363,6 +406,8 @@ export class BackgroundLayer {
 
   dispose(): void {
     this.disposed = true;
+    if (this.skyEnvTimer) clearTimeout(this.skyEnvTimer);
+    this.skyEnvTimer = null;
     this.sky.geometry.dispose();
     (this.sky.material as ShaderMaterial).dispose();
     this.envSkyMaterial.dispose();

@@ -3,7 +3,8 @@ import { DEG, clamp, lerp, smoothstep, type Vec3 } from './vec';
 export const SUNRISE_HOUR = 6.5;
 export const NOON_HOUR = 12;
 export const SUNSET_HOUR = 18;
-export const MAX_SUN_ELEVATION = 62;
+export const MAX_SUN_ELEVATION = 64;
+export const HORIZON_ELEVATION = 4;
 
 export interface SunAngles {
   azimuth: number;
@@ -47,23 +48,16 @@ export function timeOfDayToSun(hours: number, noonAzimuth = 180): SunAngles {
   } else if (h > SUNSET_HOUR) {
     phase = 1 + (h - SUNSET_HOUR) / (nightHours / 2);
   }
-  const elevation = MAX_SUN_ELEVATION * Math.cos((phase * Math.PI) / 2);
+  const span = MAX_SUN_ELEVATION - HORIZON_ELEVATION;
+  const elevation = span * Math.cos((phase * Math.PI) / 2) + HORIZON_ELEVATION;
   let azimuth = (noonAzimuth + phase * 90) % 360;
   if (azimuth < 0) azimuth += 360;
   return { azimuth, elevation };
 }
 
-const TINT_STOPS: Array<[number, Vec3]> = [
-  [-6, [0.45, 0.5, 0.75]],
-  [0, [1.0, 0.36, 0.12]],
-  [4, [1.0, 0.52, 0.26]],
-  [10, [1.0, 0.72, 0.48]],
-  [20, [1.0, 0.87, 0.72]],
-  [35, [1.0, 0.96, 0.9]],
-  [90, [1.0, 1.0, 1.0]],
-];
+type Stops = Array<[number, Vec3]>;
 
-function sampleStops(stops: Array<[number, Vec3]>, x: number): Vec3 {
+function sampleStops(stops: Stops, x: number): Vec3 {
   const first = stops[0]!;
   const last = stops[stops.length - 1]!;
   if (x <= first[0]) return [...first[1]];
@@ -79,27 +73,66 @@ function sampleStops(stops: Array<[number, Vec3]>, x: number): Vec3 {
   return [...last[1]];
 }
 
+function sampleScalar(stops: Array<[number, number]>, x: number): number {
+  const v = sampleStops(
+    stops.map(([k, s]) => [k, [s, s, s]] as [number, Vec3]),
+    x,
+  );
+  return v[0];
+}
+
+const SUN_COLOR: Stops = [
+  [-6, [1.0, 0.4, 0.18]],
+  [0, [1.0, 0.46, 0.2]],
+  [4, [1.0, 0.56, 0.3]],
+  [8, [1.0, 0.66, 0.42]],
+  [15, [1.0, 0.8, 0.6]],
+  [25, [1.0, 0.9, 0.78]],
+  [40, [1.0, 0.97, 0.92]],
+  [90, [1.0, 1.0, 1.0]],
+];
+
+const AMBIENT_COLOR: Stops = [
+  [-20, [0.26, 0.33, 0.62]],
+  [-10, [0.36, 0.42, 0.72]],
+  [-4, [0.72, 0.56, 0.68]],
+  [3, [1.0, 0.74, 0.58]],
+  [10, [0.9, 0.84, 0.86]],
+  [25, [0.8, 0.88, 1.0]],
+  [90, [0.8, 0.88, 1.0]],
+];
+
+const AMBIENT_INTENSITY: Array<[number, number]> = [
+  [-20, 0.45],
+  [-10, 0.55],
+  [-4, 0.75],
+  [3, 0.8],
+  [15, 1],
+  [90, 1],
+];
+
 export interface SunLook {
   color: Vec3;
   intensity: number;
+  lightElevation: number;
+  moon: number;
   ambientColor: Vec3;
   ambientIntensity: number;
 }
 
-const AMBIENT_STOPS: Array<[number, Vec3]> = [
-  [-12, [0.12, 0.16, 0.32]],
-  [-3, [0.35, 0.33, 0.55]],
-  [3, [0.78, 0.62, 0.62]],
-  [12, [0.78, 0.84, 0.98]],
-  [30, [0.8, 0.88, 1.0]],
-  [90, [0.82, 0.9, 1.0]],
-];
-
 export function sunLookForElevation(elevationDeg: number): SunLook {
-  const color = sampleStops(TINT_STOPS, elevationDeg);
+  const color = sampleStops(SUN_COLOR, elevationDeg);
   const intensity =
-    smoothstep(-3, 8, elevationDeg) * lerp(0.75, 1, smoothstep(8, 40, elevationDeg));
-  const ambientColor = sampleStops(AMBIENT_STOPS, elevationDeg);
-  const ambientIntensity = lerp(0.18, 1, smoothstep(-12, 15, elevationDeg));
-  return { color, intensity, ambientColor, ambientIntensity };
+    elevationDeg >= 2
+      ? lerp(0.82, 1, smoothstep(6, 40, elevationDeg))
+      : 0.82 * smoothstep(-8, 2, elevationDeg);
+  const moon = smoothstep(-6, -14, elevationDeg);
+  return {
+    color,
+    intensity,
+    lightElevation: Math.max(2, elevationDeg),
+    moon,
+    ambientColor: sampleStops(AMBIENT_COLOR, elevationDeg),
+    ambientIntensity: sampleScalar(AMBIENT_INTENSITY, elevationDeg),
+  };
 }

@@ -33,10 +33,12 @@ describe('sunDirection', () => {
 });
 
 describe('timeOfDayToSun', () => {
-  it('rises at 6.5, peaks at noon and sets at 18', () => {
-    expect(timeOfDayToSun(6.5).elevation).toBeCloseTo(0, 6);
+  it('keeps the sun a few degrees up at 6.5 and 18 and peaks at noon', () => {
+    expect(timeOfDayToSun(6.5).elevation).toBeCloseTo(4, 6);
     expect(timeOfDayToSun(12).elevation).toBeGreaterThan(55);
-    expect(timeOfDayToSun(18).elevation).toBeCloseTo(0, 6);
+    expect(timeOfDayToSun(18).elevation).toBeCloseTo(4, 6);
+    expect(timeOfDayToSun(16.5).elevation).toBeGreaterThan(10);
+    expect(timeOfDayToSun(19).elevation).toBeLessThan(-5);
     expect(timeOfDayToSun(0).elevation).toBeLessThan(-50);
     expect(timeOfDayToSun(9).elevation).toBeGreaterThan(0);
     expect(timeOfDayToSun(21).elevation).toBeLessThan(0);
@@ -66,5 +68,18 @@ describe('sunLookForElevation', () => {
     expect(low.color[2]).toBeLessThan(high.color[2]);
     expect(low.intensity).toBeLessThan(high.intensity);
     expect(sunLookForElevation(-10).intensity).toBe(0);
+  });
+
+  it('keeps warm direct light at golden hour and never drops the ambient fill', () => {
+    const golden = sunLookForElevation(4);
+    expect(golden.intensity).toBeGreaterThan(0.8);
+    expect(golden.color[2]).toBeLessThan(0.4);
+    expect(golden.lightElevation).toBe(4);
+    expect(sunLookForElevation(-3).lightElevation).toBe(2);
+    for (const el of [-40, -10, -3, 0, 5, 30]) {
+      expect(sunLookForElevation(el).ambientIntensity).toBeGreaterThan(0.4);
+    }
+    expect(sunLookForElevation(-20).moon).toBe(1);
+    expect(sunLookForElevation(10).moon).toBe(0);
   });
 });

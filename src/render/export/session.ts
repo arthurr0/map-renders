@@ -115,7 +115,11 @@ export class ExportSession {
     const s = this.host.settings;
     if (s.ssao.enabled) {
       const pxPerUnit = this.pixelsPerUnit(camera, fullHeight);
-      margin = aoMarginPixels(s.ssao.radius, pxPerUnit, 6 * Math.min(4, this.resolutionFactor));
+      margin = aoMarginPixels(
+        s.ssao.radius * 1.6,
+        pxPerUnit,
+        6 * Math.min(4, this.resolutionFactor),
+      );
     }
     return computeTileLayout({
       width: this.width,

@@ -16,8 +16,6 @@ import {
 
 export type CameraPreset = 'iso' | 'front' | 'side' | 'top' | 'three-quarter';
 
-export const ISO_ELEVATION = Math.atan(1 / Math.SQRT2) / DEG;
-
 export function presetDirection(preset: CameraPreset): Vec3 {
   switch (preset) {
     case 'iso':
@@ -147,19 +145,4 @@ export function fitPreset(
     fov,
     aspect,
   );
-}
-
-export function projectToScreen(state: CameraState, aspect: number, point: Vec3): [number, number] {
-  const z = normalize(sub(state.position, state.target));
-  const { right, up } = viewBasis(z);
-  const rel = sub(point, state.position);
-  const x = dot(rel, right);
-  const y = dot(rel, up);
-  const depth = -dot(rel, z);
-  const tanV = Math.tan((state.fov * DEG) / 2);
-  if (state.projection === 'perspective') {
-    return [x / (depth * tanV * aspect), y / (depth * tanV)];
-  }
-  const h = orthoVisibleHeight(state) / 2;
-  return [x / (h * aspect), y / h];
 }
