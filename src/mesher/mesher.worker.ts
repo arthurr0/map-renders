@@ -11,6 +11,7 @@ function collectTransferables(response: MeshResponse): Transferable[] {
       mesh.uvs.buffer,
       mesh.colors.buffer,
       mesh.indices.buffer,
+      mesh.emissive.buffer,
     );
   }
   return buffers;
