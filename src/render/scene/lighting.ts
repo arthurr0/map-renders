@@ -3,16 +3,18 @@ import {
   AgXToneMapping,
   Color,
   DirectionalLight,
-  FogExp2,
+  Fog,
   HemisphereLight,
   NeutralToneMapping,
   NoToneMapping,
   SRGBColorSpace,
   type Scene,
+  type Vector3,
   type ToneMapping,
   type WebGLRenderer,
 } from 'three';
 import type { RenderSettings } from '../../core/types';
+import { fogRange } from '../math/fog';
 import { fitShadowCamera } from '../math/shadowFit';
 import { sunDirection, sunLookForElevation } from '../math/sun';
 import type { Bounds, Vec3 } from '../math/vec';
@@ -44,6 +46,8 @@ export class SceneLighting {
   readonly sun = new DirectionalLight(0xffffff, 2.5);
   readonly hemi = new HemisphereLight(0xcfe3ff, 0x6b5a45, 0.6);
   private shadowKey = '';
+  private fogDensity = 0;
+  private fogBounds: Bounds | null = null;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -111,17 +115,27 @@ export class SceneLighting {
 
     this.applyShadow(input, dir, sunIntensity);
 
-    if (s.fog.enabled) {
+    this.fogBounds = input.bounds;
+    this.fogDensity = s.fog.enabled ? Math.max(0, s.fog.density) : 0;
+    if (this.fogDensity > 0) {
       const fogColor = new Color(s.fog.color);
-      if (this.scene.fog instanceof FogExp2) {
-        this.scene.fog.color.copy(fogColor);
-        this.scene.fog.density = s.fog.density;
-      } else {
-        this.scene.fog = new FogExp2(fogColor, s.fog.density);
-      }
+      if (this.scene.fog instanceof Fog) this.scene.fog.color.copy(fogColor);
+      else this.scene.fog = new Fog(fogColor, 1, 1000);
     } else {
       this.scene.fog = null;
     }
+  }
+
+  updateFog(cameraPosition: Vector3): void {
+    const fog = this.scene.fog;
+    if (!(fog instanceof Fog)) return;
+    const range = fogRange(
+      this.fogBounds,
+      [cameraPosition.x, cameraPosition.y, cameraPosition.z],
+      this.fogDensity,
+    );
+    fog.near = range.near;
+    fog.far = range.far;
   }
 
   private applyShadow(input: LightingInput, dir: Vec3, sunIntensity: number): void {
