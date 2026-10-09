@@ -1,0 +1,6 @@
+[
+  { "id": "meadow_2", "name": "Sunny meadow", "file": "meadow_2_1k.hdr" },
+  { "id": "kloofendal_overcast_puresky", "name": "Overcast sky", "file": "kloofendal_overcast_puresky_1k.hdr" },
+  { "id": "venice_sunset", "name": "Sunset", "file": "venice_sunset_1k.hdr" },
+  { "id": "studio_small_09", "name": "Studio", "file": "studio_small_09_1k.hdr" }
+]
