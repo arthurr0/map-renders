@@ -14,7 +14,7 @@ export const PIXEL_PERFECTION_ATTRIBUTION = [
   'Pixel Perfection by XSSheep (Hugh Rutland), licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).',
   'Original: https://www.minecraftforum.net/forums/mapping-and-modding-java-edition/resource-packs/1242533-pixel-perfection-now-with-polar-bears-1-11',
   'Updated for newer Minecraft versions by Nova Wostra (Pixel Perfection Legacy, https://modrinth.com/resourcepack/pixel-perfection-legacy), with textures and code from freejusticehere and HexaBlu.',
-  'Modified: only block textures were kept, emissive shader variants were removed, files were repacked and listed in a manifest. The same license applies to the bundled files.',
+  'Modified: only block textures and a few entity textures (chests, beds, signs, bell, decorated pot, mob heads, end portal) were kept, emissive shader variants were removed, files were repacked and listed in a manifest. The same license applies to the bundled files.',
 ].join('\n');
 
 const DECODE_OPTIONS: ImageBitmapOptions = {
@@ -22,16 +22,31 @@ const DECODE_OPTIONS: ImageBitmapOptions = {
   colorSpaceConversion: 'none',
 };
 
+interface ManifestEntry {
+  mcmeta?: unknown;
+}
+
 interface BundledManifest {
   name?: string;
   aliases?: Record<string, string>;
-  textures: Record<string, { mcmeta?: unknown }>;
+  entityAliases?: Record<string, string>;
+  textures: Record<string, ManifestEntry>;
+  entity?: Record<string, ManifestEntry>;
+}
+
+interface Resolved {
+  path: string;
+  mcmeta: unknown;
 }
 
 const fetchLimit = createLimiter(24);
 
 function stripPrefix(textureId: string): string | null {
   return textureId.startsWith('block/') ? textureId.slice('block/'.length) : null;
+}
+
+function encodePath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
 }
 
 function parseManifest(value: unknown): BundledManifest {
@@ -56,13 +71,28 @@ export async function loadBundledPack(): Promise<TexturePack> {
   }
   const textures = new Map(Object.entries(manifest.textures));
   const aliases = new Map(Object.entries(manifest.aliases ?? {}));
+  const entities = new Map(Object.entries(manifest.entity ?? {}));
+  const entityAliases = new Map(Object.entries(manifest.entityAliases ?? {}));
 
-  const resolve = (textureId: string): string | null => {
+  const lookup = (
+    kind: 'block' | 'entity',
+    name: string,
+    table: Map<string, ManifestEntry>,
+    aliasTable: Map<string, string>,
+  ): Resolved | null => {
+    const target = table.has(name) ? name : aliasTable.get(name);
+    const entry = target === undefined ? undefined : table.get(target);
+    return target !== undefined && entry
+      ? { path: `${kind}/${target}`, mcmeta: entry.mcmeta }
+      : null;
+  };
+
+  const resolve = (textureId: string): Resolved | null => {
+    if (textureId.startsWith('entity/')) {
+      return lookup('entity', textureId.slice('entity/'.length), entities, entityAliases);
+    }
     const name = stripPrefix(textureId);
-    if (name === null) return null;
-    if (textures.has(name)) return name;
-    const alias = aliases.get(name);
-    return alias !== undefined && textures.has(alias) ? alias : null;
+    return name === null ? null : lookup('block', name, textures, aliases);
   };
 
   return {
@@ -73,25 +103,35 @@ export async function loadBundledPack(): Promise<TexturePack> {
       return resolve(textureId) !== null;
     },
     async getTexture(textureId) {
-      const name = resolve(textureId);
-      if (name === null) return null;
+      const resolved = resolve(textureId);
+      if (resolved === null) return null;
       return fetchLimit(async () => {
-        const file = await fetch(`${root}block/${encodeURIComponent(name)}.png`);
+        const file = await fetch(`${root}${encodePath(resolved.path)}.png`);
         if (!file.ok) return null;
         return createImageBitmap(await file.blob(), DECODE_OPTIONS);
       });
     },
     async getMcmeta(textureId) {
-      const name = resolve(textureId);
-      return name === null ? null : (textures.get(name)?.mcmeta ?? null);
+      return resolve(textureId)?.mcmeta ?? null;
     },
   };
 }
 
-const ZIP_TEXTURE = /(?:^|\/)assets\/minecraft\/textures\/(blocks?)\/([^/]+)\.png(\.mcmeta)?$/;
-const MODERN_MARKERS = ['oak_planks', 'stone_bricks', 'grass_block_top', 'oak_log'];
+const ZIP_TEXTURE =
+  /(?:^|\/)assets\/minecraft\/textures\/(blocks?|entity)\/([^/]+(?:\/[^/]+)*)\.png(\.mcmeta)?$/;
+const MODERN_MARKERS = [
+  'block/oak_planks',
+  'block/stone_bricks',
+  'block/grass_block_top',
+  'block/oak_log',
+];
 const UNSUPPORTED_MESSAGE =
   'Only Minecraft 1.13 and newer resource packs are supported (textures/block with current file names).';
+
+interface FileTables {
+  pngs: Map<string, Uint8Array>;
+  metas: Map<string, Uint8Array>;
+}
 
 export async function loadZipPack(file: ArrayBuffer, name: string): Promise<TexturePack> {
   let entries: Record<string, Uint8Array>;
@@ -102,14 +142,18 @@ export async function loadZipPack(file: ArrayBuffer, name: string): Promise<Text
   } catch {
     throw new Error('The file is not a valid zip archive.');
   }
-  const modern = { pngs: new Map<string, Uint8Array>(), metas: new Map<string, Uint8Array>() };
-  const legacy = { pngs: new Map<string, Uint8Array>(), metas: new Map<string, Uint8Array>() };
+  const modern: FileTables = { pngs: new Map(), metas: new Map() };
+  const legacy: FileTables = { pngs: new Map(), metas: new Map() };
+  const entity: FileTables = { pngs: new Map(), metas: new Map() };
   for (const [path, bytes] of Object.entries(entries)) {
     const match = ZIP_TEXTURE.exec(path);
+    const folder = match?.[1];
     const textureName = match?.[2];
-    if (!match || !textureName) continue;
-    const target = match[1] === 'blocks' ? legacy : modern;
-    (match[3] ? target.metas : target.pngs).set(textureName, bytes);
+    if (!match || !folder || !textureName) continue;
+    if (folder !== 'entity' && textureName.includes('/')) continue;
+    const target = folder === 'entity' ? entity : folder === 'blocks' ? legacy : modern;
+    const key = folder === 'entity' ? `entity/${textureName}` : `block/${textureName}`;
+    (match[3] ? target.metas : target.pngs).set(key, bytes);
   }
   let chosen = modern;
   if (modern.pngs.size === 0) {
@@ -119,7 +163,8 @@ export async function loadZipPack(file: ArrayBuffer, name: string): Promise<Text
     }
     chosen = legacy;
   }
-  const { pngs, metas } = chosen;
+  const pngs = new Map([...chosen.pngs, ...entity.pngs]);
+  const metas = new Map([...chosen.metas, ...entity.metas]);
 
   const decoder = new TextDecoder();
   return {
@@ -127,19 +172,16 @@ export async function loadZipPack(file: ArrayBuffer, name: string): Promise<Text
     name,
     attribution: `Resource pack "${name}" supplied by the user.`,
     async has(textureId) {
-      const textureName = stripPrefix(textureId);
-      return textureName !== null && pngs.has(textureName);
+      return pngs.has(textureId);
     },
     async getTexture(textureId) {
-      const textureName = stripPrefix(textureId);
-      const bytes = textureName === null ? undefined : pngs.get(textureName);
+      const bytes = pngs.get(textureId);
       if (!bytes) return null;
       const blob = new Blob([bytes as BlobPart], { type: 'image/png' });
       return createImageBitmap(blob, DECODE_OPTIONS);
     },
     async getMcmeta(textureId) {
-      const textureName = stripPrefix(textureId);
-      const bytes = textureName === null ? undefined : metas.get(textureName);
+      const bytes = metas.get(textureId);
       if (!bytes) return null;
       try {
         return JSON.parse(decoder.decode(bytes)) as unknown;

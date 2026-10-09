@@ -12,7 +12,7 @@
 
 Modifications made for this project:
 
-- Only the block textures (`assets/minecraft/textures/block/*.png` and their animation metadata) were taken from the pack.
+- Only the block textures (`assets/minecraft/textures/block/*.png` and their animation metadata) and a few entity textures needed for block entities (chests, beds, signs, bell, decorated pot, mob heads, end portal) were taken from the pack.
 - Variants used by the pack's emissive shaders (file names ending in `_e`, `_s` and `_e_s`) were left out.
 - The animation metadata (`.mcmeta`) was merged into `public/packs/pixel-perfection/manifest.json`.
 - Files that are not vanilla block texture names (pack specific extras, numbered variants, debug files) were removed, except a few files that are the target of a manifest alias.

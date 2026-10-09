@@ -17,7 +17,7 @@ import { composeAtlas } from './atlas';
 import {
   averageColor,
   bleedTransparent,
-  chooseGrid,
+  layoutAtlas,
   classifyLayer,
   extractFrame,
   resolveAnimation,
@@ -97,15 +97,15 @@ describe('scaleNearest', () => {
   });
 });
 
-describe('chooseGrid', () => {
+describe('layoutAtlas', () => {
   it('produces power of two sizes that fit every cell', () => {
     for (const count of [1, 5, 17, 100, 700]) {
-      const grid = chooseGrid(count, 20, 16384);
+      const grid = layoutAtlas(count, 20, [], 16384);
       if (!grid) throw new Error('no grid');
       expect(Math.log2(grid.width) % 1).toBe(0);
       expect(Math.log2(grid.height) % 1).toBe(0);
-      expect(grid.cols * grid.rows).toBeGreaterThanOrEqual(count);
-      expect(grid.rows * 20).toBeLessThanOrEqual(grid.height);
+      expect(grid.cols * grid.blockRows).toBeGreaterThanOrEqual(count);
+      expect(grid.blockRows * 20).toBeLessThanOrEqual(grid.height);
       expect(grid.cols * 20).toBeLessThanOrEqual(grid.width);
     }
   });
@@ -213,6 +213,70 @@ describe('tile size selection', () => {
     expect(composed.tileSize).toBeLessThan(32);
     expect(composed.data.width).toBeLessThanOrEqual(256);
     expect(composed.data.height).toBeLessThanOrEqual(256);
+  });
+});
+
+describe('entity sheets', () => {
+  const sheet = (id: string, w: number, h: number) => ({
+    id,
+    image: image(w, h, (x, y) => [x, y, 7, 255]),
+    sheetFrames: 1,
+  });
+  const block = (id: string) => ({
+    id,
+    image: image(16, 16, () => [1, 2, 3, 255]),
+    sheetFrames: 1,
+  });
+
+  it('keeps the whole sheet at native size without overlapping blocks', () => {
+    const composed = composeAtlas(
+      [
+        block('block/a'),
+        block('block/b'),
+        sheet('entity/chest/normal', 64, 64),
+        sheet('entity/signs/oak', 64, 32),
+      ],
+      [],
+      options,
+    );
+    const { data } = composed;
+    const chest = data.regions['entity/chest/normal'];
+    const sign = data.regions['entity/signs/oak'];
+    expect(chest && Math.round((chest.u1 - chest.u0) * data.width)).toBe(64);
+    expect(chest && Math.round((chest.v1 - chest.v0) * data.height)).toBe(64);
+    expect(sign && Math.round((sign.u1 - sign.u0) * data.width)).toBe(64);
+    expect(sign && Math.round((sign.v1 - sign.v0) * data.height)).toBe(32);
+    expect(composed.tileSize).toBe(16);
+    const rects = Object.entries(data.regions).map(([id, r]) => ({
+      id,
+      x0: Math.round(r.u0 * data.width) - 4,
+      y0: Math.round(r.v0 * data.height) - 4,
+      x1: Math.round(r.u1 * data.width) + 4,
+      y1: Math.round(r.v1 * data.height) + 4,
+    }));
+    for (const a of rects) {
+      for (const b of rects) {
+        if (a.id >= b.id) continue;
+        const overlap = a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+        expect(overlap).toBe(false);
+      }
+    }
+    if (chest) {
+      const x = Math.round(chest.u0 * data.width);
+      const y = Math.round(chest.v0 * data.height);
+      const offset = ((y + 10) * composed.image.width + x + 20) * 4;
+      expect(composed.image.data[offset]).toBe(20);
+      expect(composed.image.data[offset + 1]).toBe(10);
+    }
+  });
+
+  it('shrinks entity sheets together with tiles when the atlas is too big', () => {
+    const composed = composeAtlas([sheet('entity/dragon', 256, 256)], [], {
+      ...options,
+      maxSize: 128,
+    });
+    expect(composed.data.width).toBeLessThanOrEqual(128);
+    expect(composed.data.height).toBeLessThanOrEqual(128);
   });
 });
 
@@ -363,6 +427,17 @@ describe('loadZipPack', () => {
     expect(await pack.has?.('block/oak_planks')).toBe(true);
     const old = zipSync({ 'assets/minecraft/textures/blocks/planks_oak.png': new Uint8Array([1]) });
     await expect(loadZipPack(old.buffer as ArrayBuffer, 'old')).rejects.toThrow(/1\.13/);
+  });
+
+  it('indexes entity textures with nested paths', async () => {
+    const zip = zipSync({
+      'assets/minecraft/textures/block/stone.png': new Uint8Array([1]),
+      'assets/minecraft/textures/entity/chest/normal.png': new Uint8Array([2]),
+    });
+    const pack = await loadZipPack(zip.buffer as ArrayBuffer, 'ent');
+    expect(await pack.has?.('entity/chest/normal')).toBe(true);
+    expect(await pack.has?.('block/chest/normal')).toBe(false);
+    expect(await pack.has?.('entity/stone')).toBe(false);
   });
 
   it('rejects data that is not a zip', async () => {
