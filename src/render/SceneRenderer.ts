@@ -515,6 +515,7 @@ export class SceneRenderer {
       denoiseScale: 1,
       bloomResolutionScale: 1,
       clipBox: this.clipBox,
+      clouds: { settings: s.clouds, bounds: this.bounds, ground: s.ground },
     });
     this.rig.setScene(this.bounds, this.ground.extent);
     this.requestRender();

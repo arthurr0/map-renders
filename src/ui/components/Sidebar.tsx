@@ -1,5 +1,6 @@
 import { BackgroundSection } from '../sections/BackgroundSection';
 import { BlocksSection } from '../sections/BlocksSection';
+import { CloudsSection } from '../sections/CloudsSection';
 import {
   CameraSection,
   EffectsSection,
@@ -35,6 +36,7 @@ export function Sidebar() {
       <GroundSection />
       <LightingSection />
       <EffectsSection />
+      <CloudsSection />
       <CameraSection />
       <BlocksSection />
     </aside>

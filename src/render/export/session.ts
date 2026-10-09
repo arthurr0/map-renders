@@ -84,6 +84,12 @@ export class ExportSession {
       denoiseScale: Math.min(4, Math.max(1, this.resolutionFactor)),
       bloomResolutionScale: 1,
       clipBox: host.clipBox,
+      clouds: {
+        settings: s.clouds,
+        bounds: host.bounds,
+        ground: s.ground,
+        exportSupersample: this.supersample,
+      },
     });
 
     const aspect = this.width / this.height;

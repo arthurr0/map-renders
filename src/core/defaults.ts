@@ -14,6 +14,19 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   toneMapping: 'neutral',
   exposure: 1,
   ambientOcclusionVertex: true,
+  clouds: {
+    enabled: false,
+    coverage: 0.6,
+    density: 1,
+    height: 0.15,
+    thickness: 0.6,
+    scale: 1,
+    windOffset: 0,
+    sunInfluence: 1,
+    color: '#ffffff',
+    shadowColor: '#8f9cc8',
+    quality: 'medium',
+  },
 };
 
 export const DEFAULT_MESH_OPTIONS: MeshOptions = {

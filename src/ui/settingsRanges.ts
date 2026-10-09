@@ -20,6 +20,13 @@ export const RANGES = {
   turbidity: { min: 1, max: 20 },
   hdriBlur: { min: 0, max: 1 },
   hdriRotation: { min: 0, max: 360 },
+  cloudCoverage: { min: 0, max: 1 },
+  cloudDensity: { min: 0, max: 3 },
+  cloudHeight: { min: -2, max: 2 },
+  cloudThickness: { min: 0.05, max: 2 },
+  cloudScale: { min: 0.2, max: 4 },
+  cloudWindOffset: { min: 0, max: 10 },
+  cloudSunInfluence: { min: 0, max: 3 },
 } as const satisfies Record<string, Range>;
 
 export function clampToRange(value: number, range: Range): number {

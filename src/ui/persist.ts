@@ -2,6 +2,7 @@ import {
   DEFAULT_MESH_OPTIONS,
   DEFAULT_RENDER_SETTINGS,
   type Background,
+  type CloudSettings,
   type MeshOptions,
   type RenderSettings,
   type SavedShot,
@@ -80,6 +81,23 @@ export function sanitizeBackground(raw: unknown, fallback: Background): Backgrou
   }
 }
 
+export function sanitizeClouds(raw: unknown, base: CloudSettings): CloudSettings {
+  const c = isRecord(raw) ? raw : {};
+  return {
+    enabled: bool(c.enabled, base.enabled),
+    coverage: numberInRange(c.coverage, base.coverage, RANGES.cloudCoverage),
+    density: numberInRange(c.density, base.density, RANGES.cloudDensity),
+    height: numberInRange(c.height, base.height, RANGES.cloudHeight),
+    thickness: numberInRange(c.thickness, base.thickness, RANGES.cloudThickness),
+    scale: numberInRange(c.scale, base.scale, RANGES.cloudScale),
+    windOffset: numberInRange(c.windOffset, base.windOffset, RANGES.cloudWindOffset),
+    sunInfluence: numberInRange(c.sunInfluence, base.sunInfluence, RANGES.cloudSunInfluence),
+    color: color(c.color, base.color),
+    shadowColor: color(c.shadowColor, base.shadowColor),
+    quality: pick(c.quality, ['low', 'medium', 'high'] as const, base.quality),
+  };
+}
+
 export function sanitizeSettings(raw: unknown): RenderSettings {
   const base = DEFAULT_RENDER_SETTINGS;
   if (!isRecord(raw)) return base;
@@ -136,6 +154,7 @@ export function sanitizeSettings(raw: unknown): RenderSettings {
     ),
     exposure: numberInRange(raw.exposure, base.exposure, RANGES.exposure),
     ambientOcclusionVertex: bool(raw.ambientOcclusionVertex, base.ambientOcclusionVertex),
+    clouds: sanitizeClouds(raw.clouds, base.clouds),
   };
 }
 
