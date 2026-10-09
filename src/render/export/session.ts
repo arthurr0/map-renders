@@ -8,8 +8,10 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { RenderSettings } from '../../core/types';
+import { fxMarginPixels } from '../math/effects';
 import { aoMarginPixels, computeTileLayout, type TileLayout } from '../math/tiles';
-import { boxCorners, DEG, type Bounds } from '../math/vec';
+import { boxCorners, DEG, type Bounds, type Vec3 } from '../math/vec';
+import { fxConfigFrom } from '../post/effects';
 import { DownsampleCopy } from '../post/passes';
 import { PostPipeline } from '../post/pipeline';
 import type { BackgroundLayer } from '../scene/background';
@@ -24,6 +26,7 @@ export interface ExportHost {
   clipBox: Box3 | null;
   previewFrameHeight: number;
   fov: number;
+  focusPoint?: Vec3 | null;
 }
 
 export interface ExportSessionOptions {
@@ -84,6 +87,7 @@ export class ExportSession {
       denoiseScale: Math.min(4, Math.max(1, this.resolutionFactor)),
       bloomResolutionScale: 1,
       clipBox: host.clipBox,
+      fx: fxConfigFrom(s, host.focusPoint ?? null),
     });
 
     const aspect = this.width / this.height;
@@ -94,7 +98,7 @@ export class ExportSession {
       ph = Math.max(16, Math.round(pw / aspect));
     }
     this.prepassSize = [pw, ph];
-    if (s.bloom.enabled) {
+    if (s.bloom.enabled || s.godRays.enabled) {
       this.prepass = new PostPipeline(r, host.scene, camera, host.background, pw, ph);
       this.prepass.setCamera(camera, host.fov);
       this.prepass.configure({
@@ -105,6 +109,7 @@ export class ExportSession {
         denoiseScale: 1,
         bloomResolutionScale: 1,
         clipBox: null,
+        fx: fxConfigFrom(s, null, true),
       });
     }
   }
@@ -121,6 +126,7 @@ export class ExportSession {
         6 * Math.min(4, this.resolutionFactor),
       );
     }
+    margin += fxMarginPixels(s, this.width * this.supersample, fullHeight);
     return computeTileLayout({
       width: this.width,
       height: this.height,
@@ -183,6 +189,7 @@ export class ExportSession {
       this.prepass.render(false);
       const bloom = this.prepass.bloomPass;
       this.pipeline.setExternalBloom(bloom ? bloom.bloomTexture : null);
+      this.pipeline.fx.setExternalRays(this.prepass.fx.raysTexture);
     }
 
     const image = new ImageData(this.width, this.height);

@@ -94,6 +94,52 @@ export type Background =
 
 export type GroundType = 'none' | 'shadow-catcher' | 'grass' | 'grid' | 'water';
 
+export interface GradingSettings {
+  enabled: boolean;
+  contrast: number;
+  saturation: number;
+  vibrance: number;
+  temperature: number;
+  tint: number;
+  gamma: number;
+  shadowColor: string;
+  shadowAmount: number;
+  highlightColor: string;
+  highlightAmount: number;
+  grain: number;
+  aberration: number;
+}
+
+export interface VignetteSettings {
+  enabled: boolean;
+  strength: number;
+  softness: number;
+}
+
+export interface DofSettings {
+  enabled: boolean;
+  autoFocus: boolean;
+  focusDistance: number;
+  aperture: number;
+  maxBlur: number;
+  tiltShift: number;
+}
+
+export interface GlintSettings {
+  enabled: boolean;
+  strength: number;
+  length: number;
+  threshold: number;
+}
+
+export interface GodRaySettings {
+  enabled: boolean;
+  strength: number;
+  decay: number;
+  samples: number;
+  length: number;
+}
+
 export interface RenderSettings {
   textureMode: TextureMode;
   background: Background;
@@ -105,6 +151,11 @@ export interface RenderSettings {
   ssao: { enabled: boolean; intensity: number; radius: number };
   bloom: { enabled: boolean; strength: number; threshold: number; radius: number };
   fog: { enabled: boolean; density: number; color: string };
+  grading: GradingSettings;
+  vignette: VignetteSettings;
+  dof: DofSettings;
+  glints: GlintSettings;
+  godRays: GodRaySettings;
   toneMapping: 'aces' | 'agx' | 'neutral' | 'none';
   exposure: number;
   ambientOcclusionVertex: boolean;

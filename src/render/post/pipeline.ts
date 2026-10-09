@@ -15,6 +15,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import type { RenderSettings } from '../../core/types';
 import type { BackgroundLayer } from '../scene/background';
+import { EffectsStack, type FxConfig } from './effects';
 import {
   BackgroundCompositePass,
   BloomEffect,
@@ -34,6 +35,7 @@ export interface PipelineConfig {
   denoiseScale: number;
   bloomResolutionScale: number;
   clipBox: Box3 | null;
+  fx?: FxConfig;
 }
 
 export class PostPipeline {
@@ -43,6 +45,7 @@ export class PostPipeline {
   private bloom: BloomEffect | null = null;
   private readonly output = new OutputPass();
   private readonly bgPass = new BackgroundCompositePass();
+  readonly fx: EffectsStack;
   private smaa: SMAAPass | null = null;
   private fxaa: FXAAPass | null = null;
   private width: number;
@@ -66,6 +69,8 @@ export class PostPipeline {
     this.composer.setPixelRatio(1);
     this.composer.setSize(this.width, this.height);
     this.scenePass = new SceneRenderPass(scene, camera, background);
+    this.fx = new EffectsStack(scene, camera);
+    this.fx.setSize(this.width, this.height);
   }
 
   setCamera(camera: Camera, fov: number): void {
@@ -73,6 +78,7 @@ export class PostPipeline {
     this.scenePass.camera = camera;
     this.scenePass.fov = fov;
     this.gtao?.setCamera(camera);
+    this.fx.setCamera(camera);
   }
 
   configure(config: PipelineConfig): void {
@@ -119,22 +125,32 @@ export class PostPipeline {
     if (config.antialias === 'smaa' && !this.smaa) this.smaa = new SMAAPass();
     if (config.antialias === 'fxaa' && !this.fxaa) this.fxaa = new FXAAPass();
 
+    const fx = this.fx.configure(config.fx ?? null);
     const passes: Pass[] = [this.scenePass];
     const tags = ['scene'];
+    const addFx = (list: typeof fx.beforeBloom) => {
+      for (const [tag, pass] of list) {
+        passes.push(pass);
+        tags.push(tag);
+      }
+    };
     if (config.ssao.enabled && this.gtao) {
       passes.push(this.gtao);
       tags.push('ao');
     }
+    addFx(fx.beforeBloom);
     if (config.bloom.enabled && this.bloom) {
       passes.push(this.bloom);
       tags.push('bloom');
     }
+    addFx(fx.afterBloom);
     passes.push(this.output);
     tags.push('output');
     if (post || hdrBackground) {
       passes.push(this.bgPass);
       tags.push('bg');
     }
+    addFx(fx.final);
     if (config.antialias === 'smaa' && this.smaa) {
       passes.push(this.smaa);
       tags.push('smaa');
@@ -159,6 +175,7 @@ export class PostPipeline {
     this.width = w;
     this.height = h;
     this.composer.setSize(w, h);
+    this.fx.setSize(w, h);
     if (this.gtao && !this.composer.passes.includes(this.gtao)) this.gtao.setSize(w, h);
     if (this.bloom && !this.composer.passes.includes(this.bloom)) this.bloom.setSize(w, h);
   }
@@ -166,6 +183,7 @@ export class PostPipeline {
   setTileView(view: TileView | null): void {
     this.tileView = view;
     this.bgPass.setTileView(view);
+    this.fx.setTileView(view);
     this.updateExternalBloom();
   }
 
@@ -190,6 +208,7 @@ export class PostPipeline {
 
   render(toScreen: boolean): Texture {
     this.composer.renderToScreen = toScreen;
+    this.fx.update();
     this.composer.render(0);
     return this.composer.readBuffer.texture;
   }
@@ -198,6 +217,7 @@ export class PostPipeline {
     this.scenePass.dispose();
     this.gtao?.dispose();
     this.bloom?.dispose();
+    this.fx.dispose();
     this.output.dispose();
     this.bgPass.dispose();
     this.smaa?.dispose();

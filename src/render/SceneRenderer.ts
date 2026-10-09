@@ -42,6 +42,7 @@ import type { CameraPreset } from './math/cameraFit';
 import { exportFrame, exportHeightFraction, type Rect } from './math/tiles';
 import type { Bounds, Vec3 } from './math/vec';
 import { DEFAULT_RENDER_OPTIONS, type RenderOptions } from './options';
+import { fxConfigFrom } from './post/effects';
 import { PostPipeline } from './post/pipeline';
 import { BackgroundLayer } from './scene/background';
 import { Ground, groundExtents } from './scene/ground';
@@ -515,9 +516,16 @@ export class SceneRenderer {
       denoiseScale: 1,
       bloomResolutionScale: 1,
       clipBox: this.clipBox,
+      fx: fxConfigFrom(s, this.boundsCenter()),
     });
     this.rig.setScene(this.bounds, this.ground.extent);
     this.requestRender();
+  }
+
+  private boundsCenter(): Vec3 | null {
+    const b = this.bounds;
+    if (!b) return null;
+    return [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
   }
 
   private updateWaterEnv(texture: Texture | null, rotation: number): void {
@@ -549,6 +557,7 @@ export class SceneRenderer {
         clipBox: this.clipBox,
         previewFrameHeight: frameHeight,
         fov: this.rig.fov,
+        focusPoint: this.boundsCenter(),
       },
       camera,
       { width, height, supersample },

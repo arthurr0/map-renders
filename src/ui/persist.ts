@@ -89,6 +89,11 @@ export function sanitizeSettings(raw: unknown): RenderSettings {
   const ssao = isRecord(raw.ssao) ? raw.ssao : {};
   const bloom = isRecord(raw.bloom) ? raw.bloom : {};
   const fog = isRecord(raw.fog) ? raw.fog : {};
+  const grading = isRecord(raw.grading) ? raw.grading : {};
+  const vignette = isRecord(raw.vignette) ? raw.vignette : {};
+  const dof = isRecord(raw.dof) ? raw.dof : {};
+  const glints = isRecord(raw.glints) ? raw.glints : {};
+  const godRays = isRecord(raw.godRays) ? raw.godRays : {};
   return {
     textureMode: pick(raw.textureMode, ['textured', 'simplified'] as const, base.textureMode),
     background: sanitizeBackground(raw.background, base.background),
@@ -128,6 +133,73 @@ export function sanitizeSettings(raw: unknown): RenderSettings {
       enabled: bool(fog.enabled, base.fog.enabled),
       density: numberInRange(fog.density, base.fog.density, RANGES.fogDensity),
       color: color(fog.color, base.fog.color),
+    },
+    grading: {
+      enabled: bool(grading.enabled, base.grading.enabled),
+      contrast: numberInRange(grading.contrast, base.grading.contrast, RANGES.gradingContrast),
+      saturation: numberInRange(
+        grading.saturation,
+        base.grading.saturation,
+        RANGES.gradingSaturation,
+      ),
+      vibrance: numberInRange(grading.vibrance, base.grading.vibrance, RANGES.gradingVibrance),
+      temperature: numberInRange(
+        grading.temperature,
+        base.grading.temperature,
+        RANGES.gradingTemperature,
+      ),
+      tint: numberInRange(grading.tint, base.grading.tint, RANGES.gradingTint),
+      gamma: numberInRange(grading.gamma, base.grading.gamma, RANGES.gradingGamma),
+      shadowColor: color(grading.shadowColor, base.grading.shadowColor),
+      shadowAmount: numberInRange(
+        grading.shadowAmount,
+        base.grading.shadowAmount,
+        RANGES.gradingTone,
+      ),
+      highlightColor: color(grading.highlightColor, base.grading.highlightColor),
+      highlightAmount: numberInRange(
+        grading.highlightAmount,
+        base.grading.highlightAmount,
+        RANGES.gradingTone,
+      ),
+      grain: numberInRange(grading.grain, base.grading.grain, RANGES.gradingGrain),
+      aberration: numberInRange(
+        grading.aberration,
+        base.grading.aberration,
+        RANGES.gradingAberration,
+      ),
+    },
+    vignette: {
+      enabled: bool(vignette.enabled, base.vignette.enabled),
+      strength: numberInRange(vignette.strength, base.vignette.strength, RANGES.vignetteStrength),
+      softness: numberInRange(vignette.softness, base.vignette.softness, RANGES.vignetteSoftness),
+    },
+    dof: {
+      enabled: bool(dof.enabled, base.dof.enabled),
+      autoFocus: bool(dof.autoFocus, base.dof.autoFocus),
+      focusDistance: numberInRange(
+        dof.focusDistance,
+        base.dof.focusDistance,
+        RANGES.dofFocusDistance,
+      ),
+      aperture: numberInRange(dof.aperture, base.dof.aperture, RANGES.dofAperture),
+      maxBlur: numberInRange(dof.maxBlur, base.dof.maxBlur, RANGES.dofMaxBlur),
+      tiltShift: numberInRange(dof.tiltShift, base.dof.tiltShift, RANGES.dofTiltShift),
+    },
+    glints: {
+      enabled: bool(glints.enabled, base.glints.enabled),
+      strength: numberInRange(glints.strength, base.glints.strength, RANGES.glintStrength),
+      length: numberInRange(glints.length, base.glints.length, RANGES.glintLength),
+      threshold: numberInRange(glints.threshold, base.glints.threshold, RANGES.glintThreshold),
+    },
+    godRays: {
+      enabled: bool(godRays.enabled, base.godRays.enabled),
+      strength: numberInRange(godRays.strength, base.godRays.strength, RANGES.godRaysStrength),
+      decay: numberInRange(godRays.decay, base.godRays.decay, RANGES.godRaysDecay),
+      samples: Math.round(
+        numberInRange(godRays.samples, base.godRays.samples, RANGES.godRaysSamples),
+      ),
+      length: numberInRange(godRays.length, base.godRays.length, RANGES.godRaysLength),
     },
     toneMapping: pick(
       raw.toneMapping,
