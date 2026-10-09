@@ -103,20 +103,23 @@ function Landing({ dragging }: { dragging: boolean }) {
 }
 
 export function Viewport({ dragging }: { dragging: boolean }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [failure, setFailure] = useState<string | null>(null);
   const transparent = useAppStore((state) => state.settings.background.type === 'transparent');
 
   useEffect(() => {
-    const element = canvas.current;
     const holder = container.current;
-    if (!element || !holder) return;
+    if (!holder) return;
+    const element = document.createElement('canvas');
+    element.className = 'viewport-canvas';
+    element.setAttribute('aria-label', '3D view of the schematic');
+    holder.prepend(element);
     let renderer: SceneRenderer;
     try {
       renderer = new SceneRenderer(element);
     } catch (error) {
+      element.remove();
       const message = error instanceof Error ? error.message : 'Could not start the 3D renderer.';
       queueMicrotask(() => setFailure(message));
       return;
@@ -147,12 +150,12 @@ export function Viewport({ dragging }: { dragging: boolean }) {
       unsubscribeCamera();
       setRenderer(null);
       renderer.dispose();
+      element.remove();
     };
   }, []);
 
   return (
     <main className={`app-viewport${transparent ? ' transparent' : ''}`} ref={container}>
-      <canvas ref={canvas} className="viewport-canvas" aria-label="3D view of the schematic" />
       {failure && (
         <div className="viewport-overlay">
           <p className="note error">The 3D view could not start: {failure}</p>
