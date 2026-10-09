@@ -336,6 +336,7 @@ export const paneFamily: Family = {
       layer: translucent ? 'translucent' : 'cutout',
       shadeOccluder: false,
       solid: false,
+      cullGroup: ctx.name,
     };
   },
 };
@@ -387,7 +388,7 @@ export const ironBarsFamily: Family = {
       }),
     ];
     for (const d of HORIZONTAL) if (conn[d]) parts.push(part(side, 0, sideYaw[d]));
-    return { parts, layer: 'cutout', shadeOccluder: false, solid: false };
+    return { parts, layer: 'cutout', shadeOccluder: false, solid: false, cullGroup: t };
   },
 };
 

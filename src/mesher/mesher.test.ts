@@ -66,6 +66,13 @@ describe('culling', () => {
     expect(leaves.stats.faces).toBe(12);
   });
 
+  it('culls pane ends between connected panes of the same type', () => {
+    const a = 'glass_pane[east=true,north=false,south=false,west=true]';
+    const adjacent = mesh(new VolumeBuilder(3, 1, 1).set(0, 0, 0, a).set(1, 0, 0, a));
+    const apart = mesh(new VolumeBuilder(3, 1, 1).set(0, 0, 0, a).set(2, 0, 0, a));
+    expect(adjacent.stats.faces).toBe(apart.stats.faces - 2);
+  });
+
   it('slab double occludes, bottom slab only below', () => {
     const doubleSlab = mesh(
       new VolumeBuilder(1, 2, 1).set(0, 0, 0, 'stone').set(0, 1, 0, 'stone_slab[type=double]'),
