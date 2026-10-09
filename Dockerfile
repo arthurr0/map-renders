@@ -22,7 +22,7 @@ ARG SOURCE_URL=
 
 LABEL org.opencontainers.image.title="map-renders" \
       org.opencontainers.image.description="Browser-only Minecraft schematic renderer served by nginx" \
-      org.opencontainers.image.licenses="NOASSERTION" \
+      org.opencontainers.image.licenses="MIT AND CC-BY-SA-4.0" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"

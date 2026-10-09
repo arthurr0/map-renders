@@ -7,18 +7,14 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '8080:8080'
+      - '127.0.0.1:8080:8080'
     restart: unless-stopped
     read_only: true
+    pids_limit: 100
+    mem_limit: 128m
     tmpfs:
       - /tmp
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    healthcheck:
-      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/healthz']
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
