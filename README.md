@@ -52,6 +52,73 @@ If the browser is missing, install it once with:
 pnpm exec playwright install chromium
 ```
 
+## Docker
+
+The app is a static site, so the image is just nginx serving the built files. The `Dockerfile` has two stages: a Node 22 stage that runs `pnpm build` (always on the build host, so multi-arch builds do not run Node under emulation) and an `nginxinc/nginx-unprivileged` stage that serves `dist/` on port 8080 as a non-root user.
+
+Build and run:
+
+```
+docker build -t map-renders .
+docker run --rm -p 8080:8080 map-renders
+```
+
+Then open http://localhost:8080.
+
+With Compose (builds the image and starts it with a read-only root filesystem, a tmpfs for `/tmp`, all capabilities dropped and `no-new-privileges`):
+
+```
+docker compose up --build
+```
+
+Pull the published image instead of building:
+
+```
+docker run --rm -p 8080:8080 ghcr.io/<owner>/map-renders:latest
+```
+
+Image details:
+
+- Location: `ghcr.io/<owner>/map-renders` (owner in lowercase)
+- Tags: `latest` and `sha-<short>` for every push to `master`; `1.2.3`, `1.2` and `1` for a release tag `v1.2.3` (the `1` tag is not created for `0.x` releases)
+- Platforms: `linux/amd64` and `linux/arm64`
+- Health: `GET /healthz` returns `200 ok`, and the image has a `HEALTHCHECK` that calls it
+- Read-only friendly: nginx only writes to `/tmp`, so `docker run --read-only --tmpfs /tmp` works
+- Caching: files under `/assets/` are hashed and cached for a year, `index.html` is never cached, `/packs/` and `/hdri/` are cached for a day
+- Security headers: a strict Content Security Policy (own origin only, workers from `self` and `blob:`, images from `self`, `data:` and `blob:`), `nosniff`, a referrer policy and frame blocking. The config is in `docker/nginx.conf`. If you add code that loads anything from another origin, extend the policy there.
+
+## CI/CD
+
+The workflow is `.github/workflows/ci.yml`.
+
+| Event                            | Checks, e2e | Image build | Image push                         |
+| -------------------------------- | ----------- | ----------- | ---------------------------------- |
+| Pull request                     | yes         | yes         | no                                 |
+| Push to `master`                 | yes         | yes         | `latest`, `sha-<short>`            |
+| Push of a tag `vX.Y.Z`           | yes         | yes         | `X.Y.Z`, `X.Y`, `X`                |
+| Manual run (`workflow_dispatch`) | yes         | yes         | yes, tags depend on the chosen ref |
+
+Jobs:
+
+- `checks`: `pnpm install --frozen-lockfile`, typecheck, lint, unit tests
+- `e2e`: installs Chromium with system dependencies and runs `pnpm e2e`. On failure the Playwright report and traces are uploaded as an artifact
+- `image`: runs after both jobs pass, builds for amd64 and arm64 with QEMU and Buildx, uses the GitHub Actions cache and attaches provenance and SBOM attestations. Pull requests build the image but never log in or push, so PRs from forks work without secrets
+
+Concurrency: a new run for the same branch or PR cancels the older one. Tag runs are never cancelled.
+
+Release:
+
+```
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+After the workflow finishes, the image is available as `ghcr.io/<owner>/map-renders:1.2.3`.
+
+GHCR visibility: a package published for the first time is private by default. To make it public, open the repository owner's Packages page on GitHub, select `map-renders`, go to Package settings, and under Danger Zone choose Change visibility, then Public. Also make sure the package has repository access with write role for Actions (Package settings, Manage Actions access), otherwise later pushes can be denied.
+
+Dependabot (`.github/dependabot.yml`) opens weekly grouped updates for GitHub Actions, the Docker base images and npm packages.
+
 ## Module map
 
 | Path              | Responsibility                                                                 | Owner                   |
