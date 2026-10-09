@@ -101,7 +101,7 @@ describe('loadSchematicFile', () => {
     setRenderer(renderer);
     await loadSchematicFile(createMockFile('house.schem'));
     expect(log).toEqual(['parse', 'loadBundledPack', 'requiredTextures', 'buildAtlas', 'mesh']);
-    expect(renderer.calls).toEqual(['setModel', 'setSettings', 'fitCamera:iso']);
+    expect(renderer.calls).toEqual(['setModel', 'setSettings', 'fitCamera:three-quarter']);
     expect(useAppStore.getState().volume).not.toBeNull();
     expect(useAppStore.getState().fileName).toBe('house.schem');
     expect(useAppStore.getState().loading).toBe(false);
