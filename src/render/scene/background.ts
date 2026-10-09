@@ -22,6 +22,14 @@ import {
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { Background, RenderSettings } from '../../core/types';
+import { nightSkyElevation } from '../math/night';
+import {
+  SKY_NIGHT_BODY,
+  SKY_NIGHT_PARS,
+  applyNightUniforms,
+  createNightUniforms,
+  nightKey,
+} from './skyNight';
 import { findBrightestDirection, rotateY } from '../math/hdriSun';
 import {
   directionToSunAngles,
@@ -97,6 +105,7 @@ function createSky(): Sky {
   material.uniforms.uHorizonAway = { value: new Color() };
   material.uniforms.uGlow = { value: new Color() };
   material.uniforms.uHaze = { value: 0.2 };
+  Object.assign(material.uniforms, createNightUniforms());
   material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\nuniform vec3 uZenith;\nuniform vec3 uHorizon;\nuniform vec3 uHorizonAway;\nuniform vec3 uGlow;\nuniform float uHaze;\n${material.fragmentShader
     .replace(
       'vec3 direction = normalize( vWorldPosition - cameraPosition );',
@@ -128,10 +137,12 @@ function createSky(): Sky {
         texColor = skyColor / max( skyIntensity, 1e-3 );
       }`,
     )
+    .replace('void main() {', `${SKY_NIGHT_PARS}\nvoid main() {`)
     .replace(
       'gl_FragColor = vec4( texColor, 1.0 );',
-      `vec3 nightSky = mix( vec3( 0.012, 0.02, 0.05 ), vec3( 0.002, 0.004, 0.014 ), smoothstep( 0.0, 0.6, direction.y ) );
-      gl_FragColor = vec4( texColor * skyIntensity + nightSky * nightAmount, 1.0 );`,
+      `${SKY_NIGHT_BODY}
+      vec3 nightSky = mix( vec3( 0.012, 0.02, 0.05 ), vec3( 0.002, 0.004, 0.014 ), smoothstep( 0.0, 0.6, direction.y ) );
+      gl_FragColor = vec4( texColor * skyIntensity + nightSky * nightAmount + nightExtra, 1.0 );`,
     )}`;
   material.needsUpdate = true;
   sky.scale.setScalar(10);
@@ -187,6 +198,7 @@ export class BackgroundLayer {
   private disposed = false;
 
   kind: 'none' | 'sky' | 'hdri' = 'none';
+  moonLight: { azimuth: number; elevation: number; color: string } | null = null;
   post: PostBackground | null = null;
   environment: Texture | null = null;
   reflection: Texture | null = null;
@@ -212,6 +224,7 @@ export class BackgroundLayer {
   apply(settings: RenderSettings, options: BackgroundOptions): void {
     const bg: Background = options.transparent ? { type: 'transparent' } : settings.background;
     this.sunOverride = null;
+    this.moonLight = null;
     this.rotation = 0;
     this.post = null;
     this.sky.visible = false;
@@ -243,32 +256,20 @@ export class BackgroundLayer {
         break;
       }
       case 'sky': {
-        this.kind = 'sky';
         const sun = timeOfDayToSun(bg.timeOfDay, settings.sun.azimuth);
         if (options.sunFollowsBackground) this.sunOverride = sun;
-        const dir = sunDirection(sun.azimuth, sun.elevation);
-        const u = (this.sky.material as ShaderMaterial).uniforms;
-        u.sunPosition!.value = new Vector3(dir[0], dir[1], dir[2]);
-        u.turbidity!.value = 1.2 + Math.max(0, bg.turbidity) * 0.45;
-        u.rayleigh!.value = sun.elevation < 12 ? 2.6 : 2.4;
-        u.mieCoefficient!.value = sun.elevation < 12 ? 0.004 : 0.0022;
-        u.mieDirectionalG!.value = 0.82;
-        u.cloudCoverage!.value = options.skyClouds;
-        u.cloudDensity!.value = 0.45;
-        u.showSunDisc!.value = 1;
-        u.nightAmount!.value = 1 - Math.min(1, Math.max(0, (sun.elevation + 8) / 10));
-        const palette = skyPalette(sun.elevation, bg.turbidity);
-        setSrgb(u.uZenith!.value as Color, palette.zenith);
-        setSrgb(u.uHorizon!.value as Color, palette.horizon);
-        setSrgb(u.uHorizonAway!.value as Color, palette.horizonAway);
-        setSrgb(u.uGlow!.value as Color, palette.glow);
-        u.uHaze!.value = palette.haze;
-        this.sky.visible = true;
-        const key = `${dir.map((v) => v.toFixed(4)).join(',')}:${bg.turbidity}:${options.skyClouds}`;
-        this.updateSkyEnv(key);
-        this.environment = this.skyEnv?.texture ?? null;
-        this.environmentScale = SKY_ENV_SCALE;
-        this.reflection = this.skyEnv?.texture ?? null;
+        this.applySky(settings, sun, bg.turbidity, options, false);
+        break;
+      }
+      case 'night-sky': {
+        const sun = {
+          azimuth: settings.sun.azimuth,
+          elevation: nightSkyElevation(bg.twilight),
+        };
+        if (options.sunFollowsBackground) {
+          this.moonLight = { ...settings.sky.moon };
+        }
+        this.applySky(settings, sun, 4, options, true);
         break;
       }
       case 'hdri': {
@@ -296,6 +297,40 @@ export class BackgroundLayer {
         break;
       }
     }
+  }
+
+  private applySky(
+    settings: RenderSettings,
+    sun: SunAngles,
+    turbidity: number,
+    options: BackgroundOptions,
+    forceNight: boolean,
+  ): void {
+    this.kind = 'sky';
+    const dir = sunDirection(sun.azimuth, sun.elevation);
+    const u = (this.sky.material as ShaderMaterial).uniforms;
+    u.sunPosition!.value = new Vector3(dir[0], dir[1], dir[2]);
+    u.turbidity!.value = 1.2 + Math.max(0, turbidity) * 0.45;
+    u.rayleigh!.value = sun.elevation < 12 ? 2.6 : 2.4;
+    u.mieCoefficient!.value = sun.elevation < 12 ? 0.004 : 0.0022;
+    u.mieDirectionalG!.value = 0.82;
+    u.cloudCoverage!.value = options.skyClouds;
+    u.cloudDensity!.value = 0.45;
+    u.showSunDisc!.value = 1;
+    u.nightAmount!.value = 1 - Math.min(1, Math.max(0, (sun.elevation + 8) / 10));
+    const palette = skyPalette(sun.elevation, turbidity);
+    setSrgb(u.uZenith!.value as Color, palette.zenith);
+    setSrgb(u.uHorizon!.value as Color, palette.horizon);
+    setSrgb(u.uHorizonAway!.value as Color, palette.horizonAway);
+    setSrgb(u.uGlow!.value as Color, palette.glow);
+    u.uHaze!.value = palette.haze;
+    applyNightUniforms(u, settings.sky, { sunElevation: sun.elevation, forceNight });
+    this.sky.visible = true;
+    const key = `${dir.map((v) => v.toFixed(4)).join(',')}:${turbidity}:${options.skyClouds}:${nightKey(settings.sky)}:${forceNight ? 1 : 0}`;
+    this.updateSkyEnv(key);
+    this.environment = this.skyEnv?.texture ?? null;
+    this.environmentScale = SKY_ENV_SCALE;
+    this.reflection = this.skyEnv?.texture ?? null;
   }
 
   private useHdri(

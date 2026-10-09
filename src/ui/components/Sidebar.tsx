@@ -9,7 +9,9 @@ import {
   LightingSection,
   PresetsSection,
 } from '../sections/SettingsSections';
+import { SkySection } from '../sections/SkySection';
 import { TexturesSection } from '../sections/TexturesSection';
+import { WaterSection } from '../sections/WaterSection';
 import { useAppStore } from '../store';
 import { IconButton } from './Icon';
 
@@ -34,7 +36,9 @@ export function Sidebar() {
       <PresetsSection />
       <TexturesSection />
       <BackgroundSection />
+      <SkySection />
       <GroundSection />
+      <WaterSection />
       <LightingSection />
       <EffectsSection />
       <PostFxSection />

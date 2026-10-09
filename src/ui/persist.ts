@@ -7,6 +7,7 @@ import {
   type SavedShot,
 } from '../core';
 
+import { sanitizeSky, sanitizeWater } from './persistEffects';
 import { RANGES, numberInRange } from './settingsRanges';
 
 const PREFIX = 'mr:';
@@ -66,6 +67,8 @@ export function sanitizeBackground(raw: unknown, fallback: Background): Backgrou
         timeOfDay: numberInRange(raw.timeOfDay, 12, RANGES.timeOfDay),
         turbidity: numberInRange(raw.turbidity, 4, RANGES.turbidity),
       };
+    case 'night-sky':
+      return { type: 'night-sky', twilight: numberInRange(raw.twilight, 0.2, RANGES.twilight) };
     case 'hdri':
       return {
         type: 'hdri',
@@ -102,6 +105,8 @@ export function sanitizeSettings(raw: unknown): RenderSettings {
       ['none', 'shadow-catcher', 'grass', 'grid', 'water'] as const,
       base.ground,
     ),
+    water: sanitizeWater(raw.water),
+    sky: sanitizeSky(raw.sky),
     sun: {
       azimuth: numberInRange(sun.azimuth, base.sun.azimuth, RANGES.azimuth),
       elevation: numberInRange(sun.elevation, base.sun.elevation, RANGES.elevation),

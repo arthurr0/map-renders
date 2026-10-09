@@ -42,6 +42,23 @@ export const RANGES = {
   turbidity: { min: 1, max: 20 },
   hdriBlur: { min: 0, max: 1 },
   hdriRotation: { min: 0, max: 360 },
+  waterReflectivity: { min: 0, max: 1 },
+  waterWaveHeight: { min: 0, max: 2 },
+  waterWaveScale: { min: 0.25, max: 4 },
+  waterWavePhase: { min: 0, max: 100 },
+  waterRoughness: { min: 0, max: 1 },
+  waterSunGlitter: { min: 0, max: 4 },
+  waterShoreGlow: { min: 0, max: 2 },
+  waterLevel: { min: -16, max: 128 },
+  twilight: { min: 0, max: 1 },
+  starDensity: { min: 0, max: 1 },
+  starBrightness: { min: 0, max: 4 },
+  moonAzimuth: { min: 0, max: 360 },
+  moonElevation: { min: -10, max: 90 },
+  moonSize: { min: 0.5, max: 12 },
+  moonGlow: { min: 0, max: 3 },
+  horizonGlowIntensity: { min: 0, max: 2 },
+  horizonGlowHeight: { min: 0.05, max: 1 },
 } as const satisfies Record<string, Range>;
 
 export function clampToRange(value: number, range: Range): number {

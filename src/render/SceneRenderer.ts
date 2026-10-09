@@ -116,7 +116,7 @@ export class SceneRenderer {
     this.scene.add(this.modelGroup);
     this.lighting = new SceneLighting(this.renderer, this.scene);
     this.background = new BackgroundLayer(this.renderer, () => this.applySettings());
-    this.ground = new Ground(this.shared, this.renderer.capabilities.getMaxAnisotropy());
+    this.ground = new Ground(this.shared, this.renderer.capabilities.getMaxAnisotropy(), true);
     this.scene.add(this.ground.group);
 
     this.rig = new CameraRig(canvas, {
@@ -207,6 +207,7 @@ export class SceneRenderer {
       new Vector3(this.bounds.max[0] + 4, this.bounds.max[1] + 4, this.bounds.max[2] + 4),
     );
     this.lighting.invalidateShadow();
+    this.ground.invalidateWater();
     this.applySettings();
     if (valid && !this.cameraInitialized) {
       this.cameraInitialized = true;
@@ -220,6 +221,7 @@ export class SceneRenderer {
     this.clipBox = null;
     this.hasWater = false;
     this.lighting.invalidateShadow();
+    this.ground.invalidateWater();
     this.applySettings();
   }
 
@@ -494,13 +496,16 @@ export class SceneRenderer {
     this.ground.setGridBackdrop(
       bg.type === 'solid' ? bg.color : bg.type === 'gradient' ? bg.bottom : null,
     );
-    this.ground.update(s.ground, this.bounds);
+    this.ground.update(s.ground, this.bounds, s.water);
     const extents = groundExtents(this.bounds);
     this.lighting.apply({
       settings: s,
       background: this.background,
       bounds: this.bounds,
-      groundY: s.ground !== 'none' && this.bounds ? this.bounds.min[1] : undefined,
+      groundY:
+        s.ground !== 'none' && this.bounds
+          ? (this.ground.surfaceY ?? this.bounds.min[1])
+          : undefined,
       shadowReach: extents.shadowFadeOuter + 12,
     });
     const rotation = this.background.kind === 'hdri' ? this.background.rotation : 0;
