@@ -108,6 +108,8 @@ export interface AppState {
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   helpOpen: boolean;
+  creditsOpen: boolean;
+  setCreditsOpen: (open: boolean) => void;
   setLeftDrawerOpen: (open: boolean) => void;
   setRightDrawerOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -271,6 +273,8 @@ export const useAppStore = create<AppState>((set) => ({
   leftDrawerOpen: false,
   rightDrawerOpen: false,
   helpOpen: false,
+  creditsOpen: false,
+  setCreditsOpen: (creditsOpen) => set({ creditsOpen }),
   setLeftDrawerOpen: (leftDrawerOpen) => set({ leftDrawerOpen }),
   setRightDrawerOpen: (rightDrawerOpen) => set({ rightDrawerOpen }),
   setHelpOpen: (helpOpen) => set({ helpOpen }),

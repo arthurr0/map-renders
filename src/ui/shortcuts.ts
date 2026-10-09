@@ -18,7 +18,7 @@ export function handleShortcut(event: KeyboardEvent): boolean {
   if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return false;
   if (isTypingTarget(event.target)) return false;
   const store = useAppStore.getState();
-  if (store.exportOpen || store.helpOpen) return false;
+  if (store.exportOpen || store.helpOpen || store.creditsOpen) return false;
   const key = event.key;
   const preset = CAMERA_PRESETS.find((candidate) => candidate.key === key);
   if (preset) {

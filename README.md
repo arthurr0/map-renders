@@ -30,6 +30,25 @@ The UI language is English only.
 - `pnpm typecheck`: run the TypeScript compiler without emitting
 - `pnpm lint`: run ESLint
 - `pnpm format`: run Prettier
+- `pnpm e2e`: build the app and run the Playwright smoke test
+
+## End to end test
+
+`pnpm e2e` builds the app, serves it with `vite preview` on port 4179 and runs `e2e/smoke.spec.ts` in Chromium. The test opens `tests/fixtures/village_v3.schem` through the file picker, exports a 1080p PNG and checks the PNG size and that the console stays free of errors.
+
+WebGL runs on SwiftShader (software rendering) through the Chromium args `--use-angle=swiftshader --enable-unsafe-swiftshader`, so no GPU is needed. It is slow, a run takes under a minute.
+
+On headless Linux without a display, unset the display variables:
+
+```
+env -u WAYLAND_DISPLAY -u DISPLAY pnpm e2e
+```
+
+If the browser is missing, install it once with:
+
+```
+pnpm exec playwright install chromium
+```
 
 ## Module map
 

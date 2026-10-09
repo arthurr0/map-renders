@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CreditsDialog } from './components/CreditsDialog';
 import { ExportDialog } from './components/ExportDialog';
 import { HelpOverlay, Toasts } from './components/Overlays';
 import { ShotsPanel } from './components/ShotsPanel';
@@ -95,6 +96,7 @@ export function App() {
       )}
       <ExportDialog />
       <HelpOverlay />
+      <CreditsDialog />
       <Toasts />
     </div>
   );

@@ -555,6 +555,7 @@ export class SceneRenderer {
       await this.background.whenReady();
       throwIfAborted(signal);
       this.exporting++;
+      this.lighting.updateFog(this.rig.camera.position);
       const time = this.shared.uTime.value;
       try {
         return await job();
@@ -608,6 +609,7 @@ export class SceneRenderer {
     if (this.dirty) {
       this.dirty = false;
       this.rig.camera.updateMatrixWorld();
+      this.lighting.updateFog(this.rig.camera.position);
       this.pipeline.render(true);
     }
     if (active || this.rig.interacting || this.dirty) {

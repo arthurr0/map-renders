@@ -136,3 +136,85 @@ export function sunLookForElevation(elevationDeg: number): SunLook {
     ambientIntensity: sampleScalar(AMBIENT_INTENSITY, elevationDeg),
   };
 }
+
+function hex(value: string): Vec3 {
+  const n = parseInt(value.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+function hexStops(stops: Array<[number, string]>): Stops {
+  return stops.map(([k, v]) => [k, hex(v)] as [number, Vec3]);
+}
+
+const SKY_ZENITH = hexStops([
+  [-12, '#04060f'],
+  [-6, '#0d1430'],
+  [-2, '#1f2c5c'],
+  [2, '#33508f'],
+  [8, '#4470b5'],
+  [18, '#4d82cf'],
+  [35, '#3f7fd4'],
+  [90, '#3a7ad2'],
+]);
+
+const SKY_HORIZON = hexStops([
+  [-12, '#0c0e1c'],
+  [-6, '#3a2c3c'],
+  [-2, '#b0604a'],
+  [2, '#f09058'],
+  [6, '#f7b678'],
+  [12, '#f2d3a8'],
+  [20, '#dfe3e2'],
+  [35, '#c5dbef'],
+  [90, '#bcd5ee'],
+]);
+
+const SKY_HORIZON_AWAY = hexStops([
+  [-12, '#090b18'],
+  [-6, '#272a44'],
+  [-2, '#5c5676'],
+  [2, '#a28fa8'],
+  [6, '#c0aab8'],
+  [12, '#c3c6d6'],
+  [20, '#bfd0e6'],
+  [35, '#bad3ec'],
+  [90, '#bcd5ee'],
+]);
+
+const SKY_GLOW = hexStops([
+  [-12, '#000000'],
+  [-6, '#3a1408'],
+  [-2, '#c04a1c'],
+  [2, '#ff8a40'],
+  [8, '#ffb46a'],
+  [20, '#ffe2b4'],
+  [40, '#fff1da'],
+  [90, '#fff6e8'],
+]);
+
+export interface SkyPalette {
+  zenith: Vec3;
+  horizon: Vec3;
+  horizonAway: Vec3;
+  glow: Vec3;
+  haze: number;
+}
+
+export function skyPalette(elevationDeg: number, turbidity: number): SkyPalette {
+  const haze = clamp((turbidity - 1) / 19, 0, 1);
+  const zenith = sampleStops(SKY_ZENITH, elevationDeg);
+  const horizon = sampleStops(SKY_HORIZON, elevationDeg);
+  const horizonAway = sampleStops(SKY_HORIZON_AWAY, elevationDeg);
+  const mixHaze = haze * 0.35;
+  return {
+    zenith: [
+      lerp(zenith[0], horizonAway[0], mixHaze),
+      lerp(zenith[1], horizonAway[1], mixHaze),
+      lerp(zenith[2], horizonAway[2], mixHaze),
+    ],
+    horizon,
+    horizonAway,
+    glow: sampleStops(SKY_GLOW, elevationDeg),
+    haze,
+  };
+}

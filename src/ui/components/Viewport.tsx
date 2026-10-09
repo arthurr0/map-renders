@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SceneRenderer } from '../../render';
+import type { SceneRenderer } from '../../render';
 import { frameRect } from '../exportMath';
 import { PIPELINE_STEPS } from '../pipeline';
 import { setRenderer } from '../rendererRef';
@@ -89,70 +89,92 @@ function Landing({ dragging }: { dragging: boolean }) {
           Sponge .schem (v1 to v3), Litematica .litematic and structure block .nbt files from
           Minecraft 1.13 and newer. Everything runs in your browser, files are never uploaded.
         </p>
-        <a
+        <button
+          type="button"
           className="credit"
-          href="https://creativecommons.org/licenses/by-sa/4.0/"
-          target="_blank"
-          rel="noreferrer"
+          onClick={() => useAppStore.getState().setCreditsOpen(true)}
         >
           Textures: Pixel Perfection, CC BY-SA 4.0
-        </a>
+        </button>
       </div>
     </div>
   );
 }
 
 export function Viewport({ dragging }: { dragging: boolean }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [failure, setFailure] = useState<string | null>(null);
   const transparent = useAppStore((state) => state.settings.background.type === 'transparent');
 
   useEffect(() => {
-    const element = canvas.current;
     const holder = container.current;
-    if (!element || !holder) return;
-    let renderer: SceneRenderer;
-    try {
-      renderer = new SceneRenderer(element);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not start the 3D renderer.';
-      queueMicrotask(() => setFailure(message));
-      return;
-    }
+    if (!holder) return;
+    let disposed = false;
+    let cleanup: (() => void) | null = null;
 
-    const fit = () => {
-      const width = Math.max(1, Math.floor(holder.clientWidth));
-      const height = Math.max(1, Math.floor(holder.clientHeight));
-      renderer.resize(width, height);
-      setSize({ width, height });
+    const start = (Renderer: typeof SceneRenderer) => {
+      const element = document.createElement('canvas');
+      element.className = 'viewport-canvas';
+      element.setAttribute('aria-label', '3D view of the schematic');
+      holder.prepend(element);
+      let renderer: SceneRenderer;
+      try {
+        renderer = new Renderer(element);
+      } catch (error) {
+        element.remove();
+        setFailure(error instanceof Error ? error.message : 'Could not start the 3D renderer.');
+        return;
+      }
+
+      const fit = () => {
+        const width = Math.max(1, Math.floor(holder.clientWidth));
+        const height = Math.max(1, Math.floor(holder.clientHeight));
+        renderer.resize(width, height);
+        setSize({ width, height });
+      };
+      fit();
+      const observer = new ResizeObserver(fit);
+      observer.observe(holder);
+
+      let frame = 0;
+      const unsubscribeCamera = renderer.onCameraChange((camera) => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => useAppStore.getState().setCamera(camera));
+      });
+
+      setRenderer(renderer);
+      useAppStore.getState().setCamera(renderer.getCamera());
+
+      cleanup = () => {
+        cancelAnimationFrame(frame);
+        observer.disconnect();
+        unsubscribeCamera();
+        setRenderer(null);
+        renderer.dispose();
+        element.remove();
+      };
     };
-    fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(holder);
 
-    let frame = 0;
-    const unsubscribeCamera = renderer.onCameraChange((camera) => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => useAppStore.getState().setCamera(camera));
-    });
-
-    setRenderer(renderer);
-    useAppStore.getState().setCamera(renderer.getCamera());
+    import('../../render').then(
+      (module) => {
+        if (!disposed) start(module.SceneRenderer);
+      },
+      (error: unknown) => {
+        if (disposed) return;
+        setFailure(error instanceof Error ? error.message : 'Could not load the 3D renderer.');
+      },
+    );
 
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      unsubscribeCamera();
-      setRenderer(null);
-      renderer.dispose();
+      disposed = true;
+      cleanup?.();
+      cleanup = null;
     };
   }, []);
 
   return (
     <main className={`app-viewport${transparent ? ' transparent' : ''}`} ref={container}>
-      <canvas ref={canvas} className="viewport-canvas" aria-label="3D view of the schematic" />
       {failure && (
         <div className="viewport-overlay">
           <p className="note error">The 3D view could not start: {failure}</p>

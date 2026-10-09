@@ -192,7 +192,7 @@ export async function loadSchematicFile(file: File): Promise<void> {
     const renderer = getRenderer();
     if (renderer) {
       pushModel(renderer, loaded, useAppStore.getState().settings);
-      renderer.fitCamera('iso');
+      renderer.fitCamera('three-quarter');
     }
     const finalStore = useAppStore.getState();
     finalStore.pushToast('success', `Loaded ${file.name}`);
@@ -304,7 +304,7 @@ export function startPipelineSync(debounceMs = 250): () => void {
     renderer.setSettings(useAppStore.getState().settings);
     if (model) {
       pushModel(renderer, model, useAppStore.getState().settings);
-      renderer.fitCamera('iso');
+      renderer.fitCamera('three-quarter');
     }
   });
 

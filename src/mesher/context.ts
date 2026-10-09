@@ -4,7 +4,7 @@ import { createTextureLookup, type TextureLookup } from './bake';
 import { GeometryBuilder } from './builder';
 import { AIR, analyzePalette, normalizeName, type PaletteInfo } from './palette';
 
-export const AO_SHADE = 0.2;
+export const AO_SHADE = 0.5;
 
 export const AO_LEVELS: number[] = [0, 1, 2, 3, 4].map((k) =>
   srgbToLinear((k * AO_SHADE + (4 - k)) / 4),

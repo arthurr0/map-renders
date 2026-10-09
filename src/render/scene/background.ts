@@ -10,6 +10,7 @@ import {
   PerspectiveCamera,
   Scene,
   ShaderMaterial,
+  SRGBColorSpace,
   SphereGeometry,
   Vector3,
   type Camera,
@@ -22,7 +23,13 @@ import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { Background, RenderSettings } from '../../core/types';
 import { findBrightestDirection, rotateY } from '../math/hdriSun';
-import { directionToSunAngles, sunDirection, timeOfDayToSun, type SunAngles } from '../math/sun';
+import {
+  directionToSunAngles,
+  skyPalette,
+  sunDirection,
+  timeOfDayToSun,
+  type SunAngles,
+} from '../math/sun';
 import { DEG, type Vec3 } from '../math/vec';
 
 export interface HdriEntry {
@@ -74,15 +81,24 @@ const SKY_INTENSITY = 0.38;
 const SKY_ENV_SCALE = 0.36;
 const HORIZON_LIFT = 0.55;
 const HORIZON_BASE = 0.18;
-const SKY_SATURATION = 1.45;
 const SKY_ENV_INTERVAL_MS = 100;
+
+function setSrgb(target: Color, value: Vec3): void {
+  target.setRGB(value[0], value[1], value[2], SRGBColorSpace);
+}
 
 function createSky(): Sky {
   const sky = new Sky();
   const material = sky.material as ShaderMaterial;
   material.uniforms.skyIntensity = { value: SKY_INTENSITY };
   material.uniforms.nightAmount = { value: 0 };
-  material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\n${material.fragmentShader
+  material.uniforms.uZenith = { value: new Color() };
+  material.uniforms.uHorizon = { value: new Color() };
+  material.uniforms.uHorizonAway = { value: new Color() };
+  material.uniforms.uGlow = { value: new Color() };
+  material.uniforms.uHaze = { value: 0.2 };
+  material.uniforms.uDisc = { value: 1 };
+  material.fragmentShader = `uniform float skyIntensity;\nuniform float nightAmount;\nuniform vec3 uZenith;\nuniform vec3 uHorizon;\nuniform vec3 uHorizonAway;\nuniform vec3 uGlow;\nuniform float uHaze;\nuniform float uDisc;\n${material.fragmentShader
     .replace(
       'vec3 direction = normalize( vWorldPosition - cameraPosition );',
       `vec3 rawDirection = normalize( vWorldPosition - cameraPosition );
@@ -93,10 +109,29 @@ function createSky(): Sky {
       vec3 direction = vec3( rawDirection.xz / horizontal * sqrt( max( 1.0 - liftedY * liftedY, 0.0 ) ), liftedY ).xzy;`,
     )
     .replace(
+      'vec3 texColor = ( Lin + L0 ) * 0.04 + sundiscColor + vec3( 0.0, 0.0003, 0.00075 );',
+      `vec3 texColor;
+      {
+        float skyUp = clamp( rawDirection.y, 0.0, 1.0 );
+        vec2 sunFlat = vSunDirection.xz / max( length( vSunDirection.xz ), 1e-5 );
+        float toward = dot( sunFlat, rawDirection.xz / horizontal ) * 0.5 + 0.5;
+        vec3 horizonColor = mix( uHorizonAway, uHorizon, toward * toward * ( 3.0 - 2.0 * toward ) );
+        float bandPower = mix( 3.2, 1.7, uHaze );
+        float zenithMix = 1.0 - pow( 1.0 - skyUp, bandPower );
+        vec3 skyColor = mix( horizonColor, uZenith, zenithMix );
+        skyColor *= rawDirection.y >= 0.0 ? 1.0 : mix( 1.0, 0.82, smoothstep( 0.0, 0.35, -rawDirection.y ) );
+        float cosSun = max( dot( rawDirection, vSunDirection ), 0.0 );
+        float glowWide = pow( cosSun, mix( 10.0, 4.0, uHaze ) ) * 0.28;
+        float glowTight = pow( cosSun, 90.0 ) * 0.9;
+        float disc = smoothstep( 0.99965, 0.99985, cosSun ) * 14.0 * uDisc * showSunDisc;
+        float sunUp = smoothstep( -0.12, 0.02, vSunDirection.y );
+        skyColor += uGlow * ( glowWide + glowTight + disc ) * sunUp;
+        texColor = skyColor / max( skyIntensity, 1e-3 );
+      }`,
+    )
+    .replace(
       'gl_FragColor = vec4( texColor, 1.0 );',
       `vec3 nightSky = mix( vec3( 0.012, 0.02, 0.05 ), vec3( 0.002, 0.004, 0.014 ), smoothstep( 0.0, 0.6, direction.y ) );
-      float skyLuma = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) );
-      texColor = max( mix( vec3( skyLuma ), texColor, ${SKY_SATURATION.toFixed(2)} ), vec3( 0.0 ) );
       gl_FragColor = vec4( texColor * skyIntensity + nightSky * nightAmount, 1.0 );`,
     )}`;
   material.needsUpdate = true;
@@ -223,6 +258,12 @@ export class BackgroundLayer {
         u.cloudDensity!.value = 0.45;
         u.showSunDisc!.value = 1;
         u.nightAmount!.value = 1 - Math.min(1, Math.max(0, (sun.elevation + 8) / 10));
+        const palette = skyPalette(sun.elevation, bg.turbidity);
+        setSrgb(u.uZenith!.value as Color, palette.zenith);
+        setSrgb(u.uHorizon!.value as Color, palette.horizon);
+        setSrgb(u.uHorizonAway!.value as Color, palette.horizonAway);
+        setSrgb(u.uGlow!.value as Color, palette.glow);
+        u.uHaze!.value = palette.haze;
         this.sky.visible = true;
         const key = `${dir.map((v) => v.toFixed(4)).join(',')}:${bg.turbidity}:${options.skyClouds}`;
         this.updateSkyEnv(key);

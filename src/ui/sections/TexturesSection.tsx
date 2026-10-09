@@ -4,8 +4,6 @@ import { Icon } from '../components/Icon';
 import { applyBundledPack, applyZipPack } from '../pipeline';
 import { useAppStore } from '../store';
 
-const BUNDLED_ATTRIBUTION = 'Pixel Perfection, licensed under CC BY-SA 4.0.';
-
 export function TexturesSection() {
   const textureMode = useAppStore((state) => state.settings.textureMode);
   const ao = useAppStore((state) => state.settings.ambientOcclusionVertex);
@@ -13,7 +11,7 @@ export function TexturesSection() {
   const packSource = useAppStore((state) => state.packSource);
   const packName = useAppStore((state) => state.packName);
   const packLoading = useAppStore((state) => state.packLoading);
-  const pack = useAppStore((state) => state.pack);
+  const setCreditsOpen = useAppStore((state) => state.setCreditsOpen);
   const input = useRef<HTMLInputElement>(null);
 
   return (
@@ -69,8 +67,15 @@ export function TexturesSection() {
       <p className="note">
         {packSource === 'zip' && packName
           ? `Using ${packName} on top of the bundled pack. Missing textures fall back to Pixel Perfection.`
-          : (pack?.attribution ?? BUNDLED_ATTRIBUTION)}
+          : 'Active pack: Pixel Perfection by XSSheep, CC BY-SA 4.0.'}
       </p>
+      <button
+        type="button"
+        className="link-button align-start"
+        onClick={() => setCreditsOpen(true)}
+      >
+        Credits and licenses
+      </button>
     </Section>
   );
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { directionToSunAngles, sunDirection, sunLookForElevation, timeOfDayToSun } from './sun';
+import {
+  directionToSunAngles,
+  skyPalette,
+  sunDirection,
+  sunLookForElevation,
+  timeOfDayToSun,
+} from './sun';
 
 describe('sunDirection', () => {
   it('maps compass azimuth to world axes', () => {
@@ -81,5 +87,27 @@ describe('sunLookForElevation', () => {
     }
     expect(sunLookForElevation(-20).moon).toBe(1);
     expect(sunLookForElevation(10).moon).toBe(0);
+  });
+});
+
+describe('skyPalette', () => {
+  it('keeps a blue zenith at day and a warm horizon toward a low sun', () => {
+    const noon = skyPalette(60, 4);
+    expect(noon.zenith[2]).toBeGreaterThan(noon.zenith[0] * 2);
+    const low = skyPalette(5, 4);
+    expect(low.horizon[0]).toBeGreaterThan(low.horizon[2]);
+    expect(low.horizonAway[2]).toBeGreaterThan(low.horizon[2]);
+  });
+
+  it('goes dark at night', () => {
+    const night = skyPalette(-14, 4);
+    for (const c of [night.zenith, night.horizon, night.glow]) {
+      expect(Math.max(...c)).toBeLessThan(0.15);
+    }
+  });
+
+  it('maps turbidity to haze between 0 and 1', () => {
+    expect(skyPalette(30, 1).haze).toBe(0);
+    expect(skyPalette(30, 20).haze).toBe(1);
   });
 });
