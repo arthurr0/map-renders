@@ -174,8 +174,8 @@ describe('style presets', () => {
     expect(applyPreset(current, golden).textureMode).toBe('simplified');
   });
 
-  it('has unique ids and the five requested looks', () => {
-    expect(new Set(STYLE_PRESETS.map((p) => p.id)).size).toBe(5);
+  it('has unique ids for the five basic and eight scene looks', () => {
+    expect(new Set(STYLE_PRESETS.map((p) => p.id)).size).toBe(13);
   });
 });
 

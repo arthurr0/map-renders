@@ -471,6 +471,12 @@ input[type='checkbox'] {
     8px 8px;
 }
 
+.preset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .preset-list {
   display: flex;
   flex-direction: column;

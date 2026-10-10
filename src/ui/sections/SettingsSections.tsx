@@ -8,7 +8,7 @@ import {
   Toggle,
 } from '../components/controls';
 import { getRenderer } from '../rendererRef';
-import { STYLE_PRESETS } from '../presets';
+import { STYLE_PRESET_GROUPS, STYLE_PRESETS } from '../presets';
 import { useAppStore } from '../store';
 import type { CameraPreset } from '../../render';
 
@@ -303,22 +303,29 @@ export function PresetsSection() {
   const pushToast = useAppStore((state) => state.pushToast);
   return (
     <Section id="presets" title="Style presets" defaultOpen>
-      <div className="preset-list">
-        {STYLE_PRESETS.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            className="preset"
-            onClick={() => {
-              applyStylePreset(preset);
-              pushToast('info', `Applied ${preset.label}`);
-            }}
-          >
-            <strong>{preset.label}</strong>
-            <span>{preset.description}</span>
-          </button>
-        ))}
-      </div>
+      {STYLE_PRESET_GROUPS.map((group) => (
+        <div key={group.id} className="preset-group">
+          <div className="subheading" id={`preset-group-${group.id}`}>
+            {group.label}
+          </div>
+          <div className="preset-list" role="group" aria-labelledby={`preset-group-${group.id}`}>
+            {STYLE_PRESETS.filter((preset) => preset.group === group.id).map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="preset"
+                onClick={() => {
+                  applyStylePreset(preset);
+                  pushToast('info', `Applied ${preset.label}`);
+                }}
+              >
+                <strong>{preset.label}</strong>
+                <span>{preset.description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </Section>
   );
 }

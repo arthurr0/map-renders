@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SizeFields } from './components/ExportDialog';
 import { ShotsPanel } from './components/ShotsPanel';
+import { PresetsSection } from './sections/SettingsSections';
 import { MOCK_CAMERA } from './dev/mocks';
 import { useAppStore } from './store';
 
@@ -82,5 +83,21 @@ describe('shot rename', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
     fireEvent.blur(input);
     expect(useAppStore.getState().shots[0]?.name).toBe('Front');
+  });
+});
+
+describe('style presets section', () => {
+  it('groups presets and applies a scene preset on click', () => {
+    useAppStore.getState().resetSettings();
+    render(<PresetsSection />);
+    const scenes = screen.getByRole('group', { name: 'Scenes' });
+    const basic = screen.getByRole('group', { name: 'Basic' });
+    expect(basic.querySelectorAll('button.preset')).toHaveLength(5);
+    expect(scenes.querySelectorAll('button.preset')).toHaveLength(8);
+    fireEvent.click(screen.getByRole('button', { name: /^Cloud castle/ }));
+    const settings = useAppStore.getState().settings;
+    expect(settings.clouds.enabled).toBe(true);
+    expect(settings.ground).toBe('none');
+    useAppStore.getState().resetSettings();
   });
 });
